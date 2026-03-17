@@ -1,5 +1,6 @@
 import { config } from "./config.js";
 import { launchBrowser } from "./browser/launch.js";
+import { navigateToMeeting, joinMeeting } from "./browser/teams-join.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
@@ -8,17 +9,24 @@ async function main(): Promise<void> {
   console.log(`Headless: ${config.headless}`);
 
   if (config.mode === "direct") {
-    console.log(`Meeting URL: ${config.teamsUrl || "(not set)"}`);
+    if (!config.teamsUrl) {
+      console.error("[Main] TEAMS_MEETING_URL is not set. Add it to your .env file.");
+      process.exit(1);
+    }
+
+    console.log(`Meeting URL: ${config.teamsUrl}`);
     console.log("\n[Main] Launching browser...");
 
     const { browser, context } = await launchBrowser();
     const page = await context.newPage();
 
-    console.log("[Main] Browser is ready. Opening blank page to confirm Playwright works.");
-    await page.goto("https://www.google.com");
-    console.log(`[Main] Page title: "${await page.title()}"`);
-    console.log("[Main] Playwright is working! Browser will stay open.");
-    console.log("[Main] Press Ctrl+C to close.\n");
+    // Story 0.2: Navigate to Teams meeting and reach pre-join screen
+    await navigateToMeeting(page, config.teamsUrl);
+
+    // Story 0.3: Enter name, disable A/V, join the meeting
+    await joinMeeting(page, config.botDisplayName);
+
+    console.log("[Main] Bot is in the meeting. Press Ctrl+C to leave.\n");
 
     // Keep the process alive until Ctrl+C
     process.on("SIGINT", async () => {
