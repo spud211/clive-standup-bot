@@ -151,10 +151,10 @@ async function waitForMeetingEntry(page: Page): Promise<void> {
   // Wait for either lobby or meeting controls to appear
   const result = await Promise.race([
     meetingControls
-      .waitFor({ state: "visible", timeout: 60000 })
+      .waitFor({ state: "visible", timeout: 600000 })
       .then(() => "in-meeting" as const),
     lobbyMessage
-      .waitFor({ state: "visible", timeout: 60000 })
+      .waitFor({ state: "visible", timeout: 600000 })
       .then(() => "in-lobby" as const),
   ]);
 

@@ -112,29 +112,36 @@ export class ChatMonitor {
 
 /**
  * Open the chat panel if it isn't already visible.
+ * In some Teams layouts the chat is already integrated in the meeting view,
+ * so we try finding the compose box directly first before clicking a button.
  */
 export async function openChatPanel(page: Page): Promise<void> {
   console.log("[Chat] Ensuring chat panel is open...");
 
   const composeBox = page.locator(selectors.chatComposeBox);
-  const isVisible = await composeBox.isVisible().catch(() => false);
 
-  if (isVisible) {
-    console.log("[Chat] Chat panel already open.");
+  // First: check if compose box is already visible (chat integrated in view)
+  try {
+    await composeBox.waitFor({ state: "visible", timeout: 5000 });
+    console.log("[Chat] Chat compose box already visible.");
     return;
+  } catch {
+    // Not immediately visible — try opening the chat panel
   }
 
+  // Second: try clicking the chat button to open the panel
   try {
     const chatBtn = page.locator(selectors.chatButton);
-    await chatBtn.waitFor({ state: "visible", timeout: 10000 });
+    await chatBtn.waitFor({ state: "visible", timeout: 5000 });
     await chatBtn.click();
     console.log("[Chat] Clicked chat button.");
-
     await composeBox.waitFor({ state: "visible", timeout: 10000 });
     console.log("[Chat] Chat panel is now open.");
-  } catch (err) {
-    console.error("[Chat] Failed to open chat panel:", err);
-    throw err;
+  } catch {
+    // Chat button not found either — last resort, just wait longer for compose box
+    console.log("[Chat] No chat button found, waiting for compose box to appear...");
+    await composeBox.waitFor({ state: "visible", timeout: 30000 });
+    console.log("[Chat] Chat compose box appeared.");
   }
 }
 

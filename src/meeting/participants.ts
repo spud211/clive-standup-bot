@@ -1,27 +1,29 @@
 import { type Page } from "playwright";
 import { selectors } from "../browser/selectors.js";
 
+/** Section headers in the roster tree that should be skipped */
+const SECTION_HEADER_PREFIXES = ["In this meeting", "In the lobby"];
+
 /**
  * Read the current participant list from the Teams meeting roster.
- * Opens the participants panel if needed, reads names, then returns them.
+ * Opens the roster panel, reads names from treeitems, filters out
+ * section headers and the bot itself, then closes the panel.
  */
 export async function getParticipants(page: Page, botName: string): Promise<string[]> {
   console.log("[Participants] Reading participant list...");
 
-  // Open the people panel
+  // Open the roster panel
   try {
-    const peopleBtn = page.locator(selectors.participantsButton);
-    await peopleBtn.waitFor({ state: "visible", timeout: 10000 });
-    await peopleBtn.click();
-    console.log("[Participants] Opened people panel.");
-
-    // Give it a moment to populate
+    const rosterBtn = page.locator(selectors.participantsButton);
+    await rosterBtn.waitFor({ state: "visible", timeout: 10000 });
+    await rosterBtn.click();
+    console.log("[Participants] Opened roster panel.");
     await page.waitForTimeout(2000);
   } catch {
-    console.log("[Participants] People panel may already be open or button not found.");
+    console.log("[Participants] Roster panel may already be open or button not found.");
   }
 
-  // Read all participant entries
+  // Read all treeitem entries
   const entries = page.locator(selectors.participantEntries);
   const count = await entries.count();
   const names: string[] = [];
@@ -35,15 +37,22 @@ export async function getParticipants(page: Page, botName: string): Promise<stri
       .then((t) => t?.trim() ?? "")
       .catch(() => "");
 
-    if (name && !name.includes(botName)) {
-      names.push(name);
-    }
+    if (!name) continue;
+
+    // Skip section headers like "In this meeting (3)" or "In the lobby"
+    if (SECTION_HEADER_PREFIXES.some((prefix) => name.startsWith(prefix))) continue;
+
+    // Skip the bot itself
+    if (name === botName || name.includes(botName)) continue;
+
+    names.push(name);
   }
 
-  // Close the people panel by clicking the button again
+  // Close the roster panel
   try {
-    const peopleBtn = page.locator(selectors.participantsButton);
-    await peopleBtn.click();
+    const rosterBtn = page.locator(selectors.participantsButton);
+    await rosterBtn.click();
+    console.log("[Participants] Closed roster panel.");
   } catch {
     // Not critical
   }
@@ -54,12 +63,20 @@ export async function getParticipants(page: Page, botName: string): Promise<stri
 
 /**
  * Check if a specific participant is still in the meeting.
+ * Opens and closes the roster panel to get a fresh read.
  */
 export async function isParticipantPresent(page: Page, name: string): Promise<boolean> {
   try {
+    // Open roster
+    const rosterBtn = page.locator(selectors.participantsButton);
+    await rosterBtn.waitFor({ state: "visible", timeout: 5000 });
+    await rosterBtn.click();
+    await page.waitForTimeout(1500);
+
     const entries = page.locator(selectors.participantEntries);
     const count = await entries.count();
 
+    let found = false;
     for (let i = 0; i < count; i++) {
       const entryName = await entries
         .nth(i)
@@ -69,12 +86,18 @@ export async function isParticipantPresent(page: Page, name: string): Promise<bo
         .then((t) => t?.trim() ?? "")
         .catch(() => "");
 
-      if (entryName === name) return true;
+      if (entryName === name) {
+        found = true;
+        break;
+      }
     }
+
+    // Close roster
+    try { await rosterBtn.click(); } catch { /* not critical */ }
+
+    return found;
   } catch {
     // If we can't read, assume present to avoid skipping
     return true;
   }
-
-  return false;
 }

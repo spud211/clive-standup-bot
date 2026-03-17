@@ -36,30 +36,32 @@ export const selectors = {
   lobbyWaitMessage: '[data-tid="lobby-wait-message"], :has-text("Someone in the meeting should let you in soon")',
 
   // --- In-meeting controls ---
-  /** The main meeting toolbar/controls bar */
-  meetingControls: '[data-tid="meeting-controls"], [data-tid="calling-controls"]',
+  /** The main meeting toolbar/controls bar — #hangup-button is the most reliable indicator we're in the meeting */
+  meetingControls: '#hangup-button, [data-tid="meeting-controls"], [data-tid="calling-controls"]',
   /** Leave / hang up button */
-  leaveButton: '[data-tid="hangup-button"], [data-tid="call-hangup"]',
+  leaveButton: '#hangup-button, [data-tid="hangup-button"], [data-tid="call-hangup"]',
 
   // --- Chat panel ---
   /** Button to open the chat panel */
   chatButton: '[data-tid="chat-button"], button[aria-label="Chat"]',
   /** The chat compose/input box */
-  chatComposeBox: '[data-tid="ckeditor-replyConversation"], [data-tid="chat-compose-box"], div[role="textbox"][aria-label*="chat"]',
+  chatComposeBox: '[data-tid="ckeditor"][role="textbox"], [data-tid="ckeditor-replyConversation"], div[role="textbox"][aria-label*="chat"]',
   /** Send button in chat */
   chatSendButton: '[data-tid="newMessageCommands-send"], button[aria-label="Send"]',
-  /** Individual chat message containers */
-  chatMessages: '[data-tid="chat-pane-message"], .message-body',
+  /** Individual chat message containers (only real messages, not system/control messages) */
+  chatMessages: '[data-tid="chat-pane-item"]:has([data-tid="chat-pane-message"])',
+  /** Control/system messages to ignore */
+  chatControlMessage: '[data-tid="control-message-renderer"]',
   /** Chat message sender name */
-  chatMessageSender: '[data-tid="message-author-name"], .message-author',
+  chatMessageSender: '[data-tid="message-author-name"]',
   /** Chat message text content */
-  chatMessageText: '[data-tid="message-body-content"], .message-body-content',
+  chatMessageText: '[data-tid="chat-pane-message"]',
 
   // --- Participants panel ---
-  /** Button to open the participants/people panel */
-  participantsButton: '[data-tid="people-button"], button[aria-label="People"]',
-  /** Individual participant entries in the roster */
-  participantEntries: '[data-tid="roster-participant"], [data-tid="people-panel-participant"]',
-  /** Participant display name within an entry */
-  participantName: '[data-tid="roster-participant-name"], .participant-name',
+  /** Button to open/close the participants/people panel */
+  participantsButton: "#roster-button",
+  /** Individual participant entries in the roster tree */
+  participantEntries: '[role="tree"] [role="treeitem"]',
+  /** Clean display name within a participant entry (avoids "Organiser"/"Unverified" suffixes) */
+  participantName: 'span[dir="auto"]',
 };
