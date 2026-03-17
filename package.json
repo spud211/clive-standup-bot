@@ -1,0 +1,22 @@
+{
+  "name": "clive-standup-bot",
+  "version": "0.1.0",
+  "description": "Clive: Standup AI — a bot that joins Teams meetings and facilitates daily standups",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc && node dist/index.js",
+    "api": "MODE=api tsc && MODE=api node dist/index.js",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "private": true,
+  "dependencies": {
+    "@types/node": "^25.5.0",
+    "dotenv": "^17.3.1",
+    "playwright": "^1.58.2",
+    "typescript": "^5.9.3"
+  }
+}
