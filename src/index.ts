@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { launchBrowser } from "./browser/launch.js";
-import { navigateToMeeting, joinMeeting } from "./browser/teams-join.js";
+import { navigateToMeeting, joinMeeting, leaveMeeting } from "./browser/teams-join.js";
 import { sendChatMessage } from "./meeting/chat.js";
 
 async function main(): Promise<void> {
@@ -32,12 +32,17 @@ async function main(): Promise<void> {
 
     console.log("[Main] Bot is in the meeting. Press Ctrl+C to leave.\n");
 
-    // Keep the process alive until Ctrl+C
+    // Story 0.5: Graceful shutdown on Ctrl+C
     process.on("SIGINT", async () => {
-      console.log("\n[Main] Shutting down...");
+      console.log("\n[Main] Leaving meeting... Goodbye!");
+      try {
+        await leaveMeeting(page);
+      } catch (err) {
+        console.error("[Main] Error leaving meeting (continuing shutdown):", err);
+      }
       await context.close();
       await browser.close();
-      console.log("[Main] Browser closed. Goodbye!");
+      console.log("[Main] Browser closed. Clean exit.");
       process.exit(0);
     });
   } else {

@@ -53,6 +53,21 @@ export async function joinMeeting(page: Page, displayName: string): Promise<void
   await waitForMeetingEntry(page);
 }
 
+/**
+ * Leave the meeting by clicking the hangup/leave button.
+ */
+export async function leaveMeeting(page: Page): Promise<void> {
+  console.log("[Teams] Clicking Leave button...");
+  try {
+    const leaveBtn = page.locator(selectors.leaveButton);
+    await leaveBtn.waitFor({ state: "visible", timeout: 5000 });
+    await leaveBtn.click();
+    console.log("[Teams] Left the meeting.");
+  } catch {
+    console.log("[Teams] Could not find Leave button — may have already left.");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
