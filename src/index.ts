@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { launchBrowser } from "./browser/launch.js";
 import { navigateToMeeting, joinMeeting } from "./browser/teams-join.js";
+import { sendChatMessage } from "./meeting/chat.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
@@ -25,6 +26,9 @@ async function main(): Promise<void> {
 
     // Story 0.3: Enter name, disable A/V, join the meeting
     await joinMeeting(page, config.botDisplayName);
+
+    // Story 0.4: Send a chat message to confirm interaction works
+    await sendChatMessage(page, "Hello! Clive is online.");
 
     console.log("[Main] Bot is in the meeting. Press Ctrl+C to leave.\n");
 
