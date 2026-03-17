@@ -5,6 +5,7 @@ import { ChatMonitor, sendAndSpeak } from "./meeting/chat.js";
 import { Standup } from "./meeting/standup.js";
 import { startApiServer } from "./api/server.js";
 import { setupRtcInterception } from "./tts/audio.js";
+import { installVirtualCamera, enableCamera } from "./browser/virtual-camera.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
@@ -30,9 +31,19 @@ async function main(): Promise<void> {
   const { browser, context } = await launchBrowser();
   const page = await context.newPage();
 
+  // Install virtual camera override BEFORE navigation (needs to be in place when Teams requests camera)
+  if (config.avatarImagePath) {
+    await installVirtualCamera(page, config.avatarImagePath);
+  }
+
   // Navigate and join
   await navigateToMeeting(page, config.teamsUrl);
   await joinMeeting(page, config.botDisplayName);
+
+  // Enable camera after joining so participants see the avatar
+  if (config.avatarImagePath) {
+    await enableCamera(page);
+  }
 
   // Set up RTC interception for TTS audio injection
   if (config.ttsEnabled) {

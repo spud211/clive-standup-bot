@@ -5,6 +5,7 @@ import { navigateToMeeting, joinMeeting, leaveMeeting } from "../browser/teams-j
 import { ChatMonitor, sendAndSpeak } from "./chat.js";
 import { Standup } from "./standup.js";
 import { setupRtcInterception } from "../tts/audio.js";
+import { installVirtualCamera, enableCamera } from "../browser/virtual-camera.js";
 import { config } from "../config.js";
 
 export type SessionStatus =
@@ -129,12 +130,22 @@ export class SessionManager {
   private async runSession(session: ActiveSession): Promise<void> {
     const { id, page, meetingUrl, botName, chatMonitor, standup } = session;
 
+    // Install virtual camera before navigation
+    if (config.avatarImagePath) {
+      await installVirtualCamera(page, config.avatarImagePath);
+    }
+
     // Navigate and join
     await navigateToMeeting(page, meetingUrl);
     session.status = "in-meeting";
     console.log(`[Session ${id}] Joined meeting.`);
 
     await joinMeeting(page, botName);
+
+    // Enable camera after joining
+    if (config.avatarImagePath) {
+      await enableCamera(page);
+    }
 
     // Set up RTC interception for TTS
     if (config.ttsEnabled) {

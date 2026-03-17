@@ -14,4 +14,5 @@ export const config = {
   ttsBackend: (process.env.TTS_BACKEND ?? "say") as "say" | "espeak",
   ttsVoice: process.env.TTS_VOICE ?? "",
   ttsRate: process.env.TTS_RATE ? parseInt(process.env.TTS_RATE, 10) : undefined,
+  avatarImagePath: process.env.AVATAR_IMAGE_PATH ?? "",
 };
