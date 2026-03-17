@@ -1,7 +1,8 @@
 import { config } from "./config.js";
 import { launchBrowser } from "./browser/launch.js";
 import { navigateToMeeting, joinMeeting, leaveMeeting } from "./browser/teams-join.js";
-import { sendChatMessage } from "./meeting/chat.js";
+import { ChatMonitor, sendChatMessage } from "./meeting/chat.js";
+import { Standup } from "./meeting/standup.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
@@ -21,20 +22,48 @@ async function main(): Promise<void> {
     const { browser, context } = await launchBrowser();
     const page = await context.newPage();
 
-    // Story 0.2: Navigate to Teams meeting and reach pre-join screen
+    // Navigate and join
     await navigateToMeeting(page, config.teamsUrl);
-
-    // Story 0.3: Enter name, disable A/V, join the meeting
     await joinMeeting(page, config.botDisplayName);
 
-    // Story 0.4: Send a chat message to confirm interaction works
-    await sendChatMessage(page, "Hello! Clive is online.");
+    // Send welcome message and start listening for "start daily"
+    await sendChatMessage(
+      page,
+      "Good morning team! Type **start daily** when you're ready."
+    );
 
-    console.log("[Main] Bot is in the meeting. Press Ctrl+C to leave.\n");
+    // Set up chat monitoring
+    const chatMonitor = new ChatMonitor(page, config.botDisplayName);
+    const standup = new Standup(page, config.botDisplayName, config.lastSpeakerName);
 
-    // Story 0.5: Graceful shutdown on Ctrl+C
+    chatMonitor.onMessage(async (msg) => {
+      // Check for "start daily" trigger
+      if (msg.text.toLowerCase().includes("start daily")) {
+        if (standup.isRunning) {
+          console.log("[Main] Standup already running — ignoring 'start daily'.");
+          return;
+        }
+        console.log(`[Main] Standup triggered by ${msg.sender}`);
+        await standup.run();
+      }
+
+      // If standup is running, check for "done" / "next"
+      if (standup.isRunning) {
+        const lower = msg.text.toLowerCase().trim();
+        if (lower === "done" || lower === "next") {
+          standup.advance();
+        }
+      }
+    });
+
+    chatMonitor.start();
+
+    console.log("[Main] Bot is in the meeting, listening for commands. Press Ctrl+C to leave.\n");
+
+    // Graceful shutdown
     process.on("SIGINT", async () => {
       console.log("\n[Main] Leaving meeting... Goodbye!");
+      chatMonitor.stop();
       try {
         await leaveMeeting(page);
       } catch (err) {
