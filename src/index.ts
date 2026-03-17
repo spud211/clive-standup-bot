@@ -1,9 +1,10 @@
 import { config } from "./config.js";
 import { launchBrowser } from "./browser/launch.js";
 import { navigateToMeeting, joinMeeting, leaveMeeting } from "./browser/teams-join.js";
-import { ChatMonitor, sendChatMessage } from "./meeting/chat.js";
+import { ChatMonitor, sendAndSpeak } from "./meeting/chat.js";
 import { Standup } from "./meeting/standup.js";
 import { startApiServer } from "./api/server.js";
+import { setupRtcInterception } from "./tts/audio.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
@@ -33,8 +34,13 @@ async function main(): Promise<void> {
   await navigateToMeeting(page, config.teamsUrl);
   await joinMeeting(page, config.botDisplayName);
 
+  // Set up RTC interception for TTS audio injection
+  if (config.ttsEnabled) {
+    await setupRtcInterception(page);
+  }
+
   // Send welcome message and start listening for "start daily"
-  await sendChatMessage(
+  await sendAndSpeak(
     page,
     "Good morning team! Type **start daily** when you're ready."
   );

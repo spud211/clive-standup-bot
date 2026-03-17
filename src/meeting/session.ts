@@ -2,8 +2,9 @@ import crypto from "node:crypto";
 import { type Browser, type BrowserContext, type Page } from "playwright";
 import { launchBrowser } from "../browser/launch.js";
 import { navigateToMeeting, joinMeeting, leaveMeeting } from "../browser/teams-join.js";
-import { ChatMonitor, sendChatMessage } from "./chat.js";
+import { ChatMonitor, sendAndSpeak } from "./chat.js";
 import { Standup } from "./standup.js";
+import { setupRtcInterception } from "../tts/audio.js";
 import { config } from "../config.js";
 
 export type SessionStatus =
@@ -135,8 +136,13 @@ export class SessionManager {
 
     await joinMeeting(page, botName);
 
+    // Set up RTC interception for TTS
+    if (config.ttsEnabled) {
+      await setupRtcInterception(page);
+    }
+
     // Send welcome and start monitoring
-    await sendChatMessage(
+    await sendAndSpeak(
       page,
       "Good morning team! Type **start daily** when you're ready."
     );

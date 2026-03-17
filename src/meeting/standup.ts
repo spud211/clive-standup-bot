@@ -1,5 +1,5 @@
 import { type Page } from "playwright";
-import { sendChatMessage } from "./chat.js";
+import { sendAndSpeak } from "./chat.js";
 import { getParticipants } from "./participants.js";
 import { orderParticipants } from "./ordering.js";
 
@@ -48,7 +48,7 @@ export class Standup {
       const participants = await getParticipants(this.page, this.botName);
 
       if (participants.length === 0) {
-        await sendChatMessage(this.page, "No participants found — skipping standup.");
+        await sendAndSpeak(this.page, "No participants found — skipping standup.");
         console.log("[Standup] No participants found.");
         return;
       }
@@ -59,7 +59,7 @@ export class Standup {
 
       // Story 1.5: Prompt each participant
       for (const name of ordered) {
-        await sendChatMessage(
+        await sendAndSpeak(
           this.page,
           `**${name}**, you're up! Give us your update.`
         );
@@ -68,11 +68,11 @@ export class Standup {
         console.log(`[Standup] Waiting for ${name} to finish...`);
         await this.waitForAdvance();
 
-        await sendChatMessage(this.page, `Thanks ${name}! ✓`);
+        await sendAndSpeak(this.page, `Thanks ${name}! ✓`);
       }
 
       // Story 1.6: Standup complete
-      await sendChatMessage(
+      await sendAndSpeak(
         this.page,
         "That's everyone! Thanks team, have a great day. 👋"
       );

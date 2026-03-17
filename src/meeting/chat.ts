@@ -1,5 +1,8 @@
 import { type Page } from "playwright";
 import { selectors } from "../browser/selectors.js";
+import { speak, cleanupAudioFile } from "../tts/speak.js";
+import { playAudioInMeeting } from "../tts/audio.js";
+import { config } from "../config.js";
 
 /** A parsed chat message from the Teams meeting chat. */
 export interface ChatMessage {
@@ -171,4 +174,29 @@ export async function sendChatMessage(page: Page, message: string): Promise<void
   }
 
   console.log(`[Chat] Chat message sent: ${message}`);
+}
+
+/**
+ * Send a chat message and also speak it aloud via TTS.
+ * Chat message is sent first, then audio plays. If TTS fails,
+ * the chat message still goes through (graceful degradation).
+ */
+export async function sendAndSpeak(page: Page, message: string): Promise<void> {
+  await sendChatMessage(page, message);
+
+  if (!config.ttsEnabled) return;
+
+  try {
+    // Strip markdown bold markers for cleaner speech
+    const plainText = message.replace(/\*\*/g, "");
+    const audioPath = await speak(plainText, {
+      backend: config.ttsBackend,
+      voice: config.ttsVoice || undefined,
+      rate: config.ttsRate,
+    });
+    await playAudioInMeeting(page, audioPath);
+    await cleanupAudioFile(audioPath);
+  } catch (err) {
+    console.error("[Chat] TTS failed (chat message was still sent):", err);
+  }
 }
