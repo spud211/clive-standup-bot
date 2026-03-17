@@ -40,6 +40,8 @@ export const selectors = {
   meetingControls: '#hangup-button, [data-tid="meeting-controls"], [data-tid="calling-controls"]',
   /** Leave / hang up button */
   leaveButton: '#hangup-button, [data-tid="hangup-button"], [data-tid="call-hangup"]',
+  /** In-meeting microphone toggle (for TTS unmute/mute cycle) */
+  inMeetingMicToggle: '#microphone-button, [data-tid="toggle-mute"]',
 
   // --- Chat panel ---
   /** Button to open the chat panel */
