@@ -4,14 +4,15 @@ import { navigateToMeeting, joinMeeting, leaveMeeting } from "./browser/teams-jo
 import { ChatMonitor, sendAndSpeak } from "./meeting/chat.js";
 import { Standup } from "./meeting/standup.js";
 import { startApiServer } from "./api/server.js";
-import { setupRtcInterception } from "./tts/audio.js";
 import { installVirtualCamera, enableCamera } from "./browser/virtual-camera.js";
+import { getMessages, startTriggers, advanceTriggers } from "./i18n/messages.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
   console.log(`Mode: ${config.mode}`);
   console.log(`Bot name: ${config.botDisplayName}`);
   console.log(`Headless: ${config.headless}`);
+  console.log(`[Config] Language: ${config.language}`);
 
   if (config.mode === "api") {
     console.log("\n[Main] Starting in API mode...");
@@ -45,34 +46,32 @@ async function main(): Promise<void> {
     await enableCamera(page);
   }
 
-  // Set up RTC interception for TTS audio injection
-  if (config.ttsEnabled) {
-    await setupRtcInterception(page);
-  }
-
-  // Send welcome message and start listening for "start daily"
-  await sendAndSpeak(
-    page,
-    "Good morning team! Type **start daily** when you're ready."
-  );
+  // Send welcome message and start listening for trigger
+  const lang = config.language;
+  const msg = getMessages(lang);
+  await sendAndSpeak(page, msg.welcome, lang);
 
   // Set up chat monitoring
   const chatMonitor = new ChatMonitor(page, config.botDisplayName);
-  const standup = new Standup(page, config.botDisplayName, config.lastSpeakerName);
+  const standup = new Standup(page, config.botDisplayName, config.lastSpeakerName, lang);
 
-  chatMonitor.onMessage(async (msg) => {
-    if (msg.text.toLowerCase().includes("start daily")) {
+  const starts = startTriggers[lang];
+  const advances = advanceTriggers[lang];
+
+  chatMonitor.onMessage(async (chatMsg) => {
+    const lower = chatMsg.text.toLowerCase().replace(/\s+/g, " ").trim();
+
+    if (starts.some((t) => lower.includes(t))) {
       if (standup.isRunning) {
-        console.log("[Main] Standup already running — ignoring 'start daily'.");
+        console.log("[Main] Standup already running — ignoring start trigger.");
         return;
       }
-      console.log(`[Main] Standup triggered by ${msg.sender}`);
+      console.log(`[Main] Standup triggered by ${chatMsg.sender}`);
       await standup.run();
     }
 
     if (standup.isRunning) {
-      const lower = msg.text.toLowerCase().trim();
-      if (lower === "done" || lower === "next") {
+      if (advances.some((t) => lower.includes(t))) {
         standup.advance();
       }
     }

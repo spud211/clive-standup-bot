@@ -1,8 +1,8 @@
 import { type Page } from "playwright";
 import { selectors } from "../browser/selectors.js";
-import { speak, cleanupAudioFile } from "../tts/speak.js";
 import { playAudioInMeeting } from "../tts/audio.js";
 import { config } from "../config.js";
+import { type Language } from "../i18n/messages.js";
 
 /** A parsed chat message from the Teams meeting chat. */
 export interface ChatMessage {
@@ -177,26 +177,17 @@ export async function sendChatMessage(page: Page, message: string): Promise<void
 }
 
 /**
- * Send a chat message and also speak it aloud via TTS.
- * Chat message is sent first, then audio plays. If TTS fails,
- * the chat message still goes through (graceful degradation).
+ * Send a chat message and fire-and-forget TTS in the background.
+ * The chat message is sent immediately and the function returns without
+ * waiting for audio — the standup flow is never blocked by TTS.
  */
-export async function sendAndSpeak(page: Page, message: string): Promise<void> {
+export async function sendAndSpeak(page: Page, message: string, lang?: Language): Promise<void> {
   await sendChatMessage(page, message);
 
   if (!config.ttsEnabled) return;
 
-  try {
-    // Strip markdown bold markers for cleaner speech
-    const plainText = message.replace(/\*\*/g, "");
-    const audioPath = await speak(plainText, {
-      backend: config.ttsBackend,
-      voice: config.ttsVoice || undefined,
-      rate: config.ttsRate,
-    });
-    await playAudioInMeeting(page, audioPath);
-    await cleanupAudioFile(audioPath);
-  } catch (err) {
-    console.error("[Chat] TTS failed (chat message was still sent):", err);
-  }
+  // Fire-and-forget — don't await
+  const plainText = message.replace(/\*\*/g, "");
+  playAudioInMeeting(plainText, lang)
+    .catch((err: unknown) => console.error("[Chat] TTS failed (chat was still sent):", err));
 }

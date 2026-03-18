@@ -2,6 +2,7 @@ import { type Page } from "playwright";
 import { sendAndSpeak } from "./chat.js";
 import { getParticipants } from "./participants.js";
 import { orderParticipants } from "./ordering.js";
+import { type Language, getMessages, fmt } from "../i18n/messages.js";
 
 /**
  * Orchestrates a single standup round.
@@ -16,14 +17,16 @@ export class Standup {
   private page: Page;
   private botName: string;
   private lastSpeakerPattern: string;
+  private lang: Language;
 
   private _running = false;
   private advanceResolve: (() => void) | null = null;
 
-  constructor(page: Page, botName: string, lastSpeakerPattern: string) {
+  constructor(page: Page, botName: string, lastSpeakerPattern: string, lang: Language = "en") {
     this.page = page;
     this.botName = botName;
     this.lastSpeakerPattern = lastSpeakerPattern;
+    this.lang = lang;
   }
 
   get isRunning(): boolean {
@@ -42,13 +45,14 @@ export class Standup {
   async run(): Promise<void> {
     if (this._running) return;
     this._running = true;
+    const msg = getMessages(this.lang);
 
     try {
       // Story 1.3: Read participant list
       const participants = await getParticipants(this.page, this.botName);
 
       if (participants.length === 0) {
-        await sendAndSpeak(this.page, "No participants found — skipping standup.");
+        await sendAndSpeak(this.page, msg.noParticipants, this.lang);
         console.log("[Standup] No participants found.");
         return;
       }
@@ -59,23 +63,17 @@ export class Standup {
 
       // Story 1.5: Prompt each participant
       for (const name of ordered) {
-        await sendAndSpeak(
-          this.page,
-          `**${name}**, you're up! Give us your update.`
-        );
+        await sendAndSpeak(this.page, fmt(msg.prompt, name), this.lang);
 
         // Wait for "done" or "next" via advance()
         console.log(`[Standup] Waiting for ${name} to finish...`);
         await this.waitForAdvance();
 
-        await sendAndSpeak(this.page, `Thanks ${name}! ✓`);
+        await sendAndSpeak(this.page, fmt(msg.thanks, name), this.lang);
       }
 
       // Story 1.6: Standup complete
-      await sendAndSpeak(
-        this.page,
-        "That's everyone! Thanks team, have a great day. 👋"
-      );
+      await sendAndSpeak(this.page, msg.complete, this.lang);
       console.log("[Standup] Standup complete.");
     } catch (err) {
       console.error("[Standup] Error during standup:", err);

@@ -1,4 +1,5 @@
 import { config as dotenvConfig } from "dotenv";
+import { type Language } from "./i18n/messages.js";
 
 dotenvConfig();
 
@@ -10,9 +11,12 @@ export const config = {
   mode: (process.env.MODE ?? "direct") as "direct" | "api",
   apiPort: parseInt(process.env.API_PORT ?? "3002", 10),
   apiHost: process.env.API_HOST ?? "0.0.0.0",
+  language: (process.env.LANGUAGE ?? "en") as Language,
   ttsEnabled: process.env.TTS_ENABLED !== "false",
   ttsBackend: (process.env.TTS_BACKEND ?? "say") as "say" | "espeak",
   ttsVoice: process.env.TTS_VOICE ?? "",
+  ttsVoiceFr: process.env.TTS_VOICE_FR ?? "Thomas",
   ttsRate: process.env.TTS_RATE ? parseInt(process.env.TTS_RATE, 10) : undefined,
   avatarImagePath: process.env.AVATAR_IMAGE_PATH ?? "",
+  audioDevice: process.env.AUDIO_DEVICE ?? "BlackHole 2ch",
 };

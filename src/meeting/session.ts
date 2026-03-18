@@ -4,9 +4,9 @@ import { launchBrowser } from "../browser/launch.js";
 import { navigateToMeeting, joinMeeting, leaveMeeting } from "../browser/teams-join.js";
 import { ChatMonitor, sendAndSpeak } from "./chat.js";
 import { Standup } from "./standup.js";
-import { setupRtcInterception } from "../tts/audio.js";
 import { installVirtualCamera, enableCamera } from "../browser/virtual-camera.js";
 import { config } from "../config.js";
+import { type Language, getMessages, startTriggers, advanceTriggers } from "../i18n/messages.js";
 
 export type SessionStatus =
   | "joining"
@@ -22,6 +22,7 @@ export interface SessionInfo {
   meetingUrl: string;
   botName: string;
   lastSpeaker: string;
+  language: Language;
   status: SessionStatus;
   createdAt: string;
 }
@@ -31,6 +32,7 @@ interface ActiveSession {
   meetingUrl: string;
   botName: string;
   lastSpeaker: string;
+  language: Language;
   status: SessionStatus;
   createdAt: Date;
   browser: Browser;
@@ -50,21 +52,23 @@ export class SessionManager {
   async create(
     meetingUrl: string,
     botName = config.botDisplayName,
-    lastSpeaker = config.lastSpeakerName
+    lastSpeaker = config.lastSpeakerName,
+    language: Language = config.language
   ): Promise<SessionInfo> {
     const id = crypto.randomUUID();
-    console.log(`[Session ${id}] Creating session for ${meetingUrl}`);
+    console.log(`[Session ${id}] Creating session for ${meetingUrl} (lang: ${language})`);
 
     const { browser, context } = await launchBrowser();
     const page = await context.newPage();
     const chatMonitor = new ChatMonitor(page, botName);
-    const standup = new Standup(page, botName, lastSpeaker);
+    const standup = new Standup(page, botName, lastSpeaker, language);
 
     const session: ActiveSession = {
       id,
       meetingUrl,
       botName,
       lastSpeaker,
+      language,
       status: "joining",
       createdAt: new Date(),
       browser,
@@ -128,7 +132,10 @@ export class SessionManager {
   }
 
   private async runSession(session: ActiveSession): Promise<void> {
-    const { id, page, meetingUrl, botName, chatMonitor, standup } = session;
+    const { id, page, meetingUrl, botName, language, chatMonitor, standup } = session;
+    const msg = getMessages(language);
+    const starts = startTriggers[language];
+    const advances = advanceTriggers[language];
 
     // Install virtual camera before navigation
     if (config.avatarImagePath) {
@@ -147,34 +154,27 @@ export class SessionManager {
       await enableCamera(page);
     }
 
-    // Set up RTC interception for TTS
-    if (config.ttsEnabled) {
-      await setupRtcInterception(page);
-    }
-
     // Send welcome and start monitoring
-    await sendAndSpeak(
-      page,
-      "Good morning team! Type **start daily** when you're ready."
-    );
+    await sendAndSpeak(page, msg.welcome, language);
 
     session.status = "idle";
 
-    chatMonitor.onMessage(async (msg) => {
-      if (msg.text.toLowerCase().includes("start daily")) {
+    chatMonitor.onMessage(async (chatMsg) => {
+      const lower = chatMsg.text.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (starts.some((t) => lower.includes(t))) {
         if (standup.isRunning) {
           console.log(`[Session ${id}] Standup already running — ignoring.`);
           return;
         }
-        console.log(`[Session ${id}] Standup triggered by ${msg.sender}`);
+        console.log(`[Session ${id}] Standup triggered by ${chatMsg.sender}`);
         session.status = "standup-active";
         await standup.run();
         session.status = "idle";
       }
 
       if (standup.isRunning) {
-        const lower = msg.text.toLowerCase().trim();
-        if (lower === "done" || lower === "next") {
+        if (advances.some((t) => lower.includes(t))) {
           standup.advance();
         }
       }
@@ -189,6 +189,7 @@ export class SessionManager {
       meetingUrl: session.meetingUrl,
       botName: session.botName,
       lastSpeaker: session.lastSpeaker,
+      language: session.language,
       status: session.status,
       createdAt: session.createdAt.toISOString(),
     };

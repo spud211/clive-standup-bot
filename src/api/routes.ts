@@ -1,10 +1,12 @@
 import { type FastifyInstance } from "fastify";
 import { SessionManager } from "../meeting/session.js";
+import { type Language } from "../i18n/messages.js";
 
 interface CreateSessionBody {
   meetingUrl: string;
   botName?: string;
   lastSpeaker?: string;
+  language?: Language;
 }
 
 export function registerRoutes(app: FastifyInstance, sessions: SessionManager): void {
@@ -15,7 +17,7 @@ export function registerRoutes(app: FastifyInstance, sessions: SessionManager): 
 
   // Create session (join a meeting)
   app.post<{ Body: CreateSessionBody }>("/sessions", async (request, reply) => {
-    const { meetingUrl, botName, lastSpeaker } = request.body ?? {};
+    const { meetingUrl, botName, lastSpeaker, language } = request.body ?? {};
 
     if (!meetingUrl || typeof meetingUrl !== "string") {
       return reply.status(400).send({ error: "meetingUrl is required" });
@@ -27,8 +29,12 @@ export function registerRoutes(app: FastifyInstance, sessions: SessionManager): 
       return reply.status(400).send({ error: "meetingUrl must be a valid URL" });
     }
 
-    console.log(`[API] POST /sessions — meetingUrl: ${meetingUrl}`);
-    const session = await sessions.create(meetingUrl, botName, lastSpeaker);
+    if (language && language !== "en" && language !== "fr") {
+      return reply.status(400).send({ error: "language must be 'en' or 'fr'" });
+    }
+
+    console.log(`[API] POST /sessions — meetingUrl: ${meetingUrl}, lang: ${language ?? "default"}`);
+    const session = await sessions.create(meetingUrl, botName, lastSpeaker, language);
     return reply.status(201).send(session);
   });
 
