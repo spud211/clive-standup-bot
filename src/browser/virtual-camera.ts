@@ -88,27 +88,29 @@ export async function installVirtualCamera(page: Page, imagePath: string): Promi
 }
 
 /**
- * Turn the camera ON in the Teams meeting by clicking the camera toggle.
+ * Ensure the camera is ON in the Teams meeting.
+ * Since the pre-join screen leaves camera on when avatar is configured,
+ * this just verifies the state and only clicks if it's actually off.
  */
 export async function enableCamera(page: Page): Promise<void> {
-  console.log("[VirtualCamera] Enabling camera in meeting...");
+  console.log("[VirtualCamera] Checking camera state...");
   try {
     const camBtn = page.locator(selectors.inMeetingCameraToggle);
     await camBtn.waitFor({ state: "visible", timeout: 10000 });
 
-    // Check if camera is currently off
-    const ariaLabel = await camBtn.getAttribute("aria-label") ?? "";
-    const isOff = ariaLabel.toLowerCase().includes("turn on") ||
-                  ariaLabel.toLowerCase().includes("camera off") ||
-                  ariaLabel.toLowerCase().includes("start camera");
+    // aria-label is "Turn camera on" (camera is off) or "Turn camera off" (camera is on)
+    const ariaLabel = (await camBtn.getAttribute("aria-label") ?? "").toLowerCase();
+    console.log(`[VirtualCamera] Camera button aria-label: "${ariaLabel}"`);
 
-    if (isOff) {
-      await camBtn.click();
-      console.log("[VirtualCamera] Camera turned ON.");
+    if (ariaLabel.includes("turn camera off")) {
+      // "Turn camera off" means the camera is currently ON
+      console.log("[VirtualCamera] Camera is already ON.");
     } else {
-      console.log("[VirtualCamera] Camera appears to already be ON.");
+      // "Turn camera on" or anything else — click to turn it on
+      await camBtn.click();
+      console.log("[VirtualCamera] Camera was off — turned ON.");
     }
   } catch (err) {
-    console.error("[VirtualCamera] Failed to enable camera:", err);
+    console.error("[VirtualCamera] Failed to check/enable camera:", err);
   }
 }

@@ -39,8 +39,12 @@ export async function joinMeeting(page: Page, displayName: string): Promise<void
   // Ensure mic is off
   await toggleOffDevice(page, selectors.micToggle, "Microphone");
 
-  // Ensure camera is off
-  await toggleOffDevice(page, selectors.cameraToggle, "Camera");
+  // Ensure camera is off — unless avatar is configured (camera stays on for virtual feed)
+  if (!config.avatarImagePath) {
+    await toggleOffDevice(page, selectors.cameraToggle, "Camera");
+  } else {
+    console.log("[Teams] Skipping camera-off toggle (avatar image configured).");
+  }
 
   // Click Join now
   console.log("[Teams] Clicking Join now...");

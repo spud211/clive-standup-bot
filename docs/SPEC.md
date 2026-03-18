@@ -175,6 +175,7 @@ All config via environment variables or a `.env` file:
 | `API_PORT` | Port for REST API (Phase 1.5+) | `3002` |
 | `API_HOST` | Bind address for REST API | `0.0.0.0` |
 | `MODE` | `direct` (single meeting via env) or `api` (REST server) | `direct` |
+| `AVATAR_IMAGE_PATH` | Path to Clive's avatar image (optional — camera off if unset) | `./assets/clive-avatar.png` |
 
 ---
 

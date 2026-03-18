@@ -41,7 +41,7 @@ export const selectors = {
   /** Leave / hang up button */
   leaveButton: '#hangup-button, [data-tid="hangup-button"], [data-tid="call-hangup"]',
   /** In-meeting microphone toggle (for TTS unmute/mute cycle) */
-  inMeetingMicToggle: '#microphone-button, [data-tid="toggle-mute"]',
+  inMeetingMicToggle: '#mic-button, [data-tid="toggle-mute"]',
   /** In-meeting camera toggle */
   inMeetingCameraToggle: '#video-button, [data-tid="toggle-video"]',
 
