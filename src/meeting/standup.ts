@@ -1,5 +1,5 @@
 import { type Page } from "playwright";
-import { sendAndSpeak } from "./chat.js";
+import { sendAndSpeak, sendChatMessage } from "./chat.js";
 import { getParticipants } from "./participants.js";
 import { orderParticipants } from "./ordering.js";
 import { type Language, getMessages, fmt, pickComplete } from "../i18n/messages.js";
@@ -71,10 +71,10 @@ export class Standup {
       const ordered = orderParticipants(participants, this.lastSpeakerPattern);
       console.log(`[Standup] Order: [${ordered.join(", ")}]`);
 
-      // Story 2.5.2: Ops ceremony — give the conn to the last speaker (team lead)
+      // Story 2.5.2: Ops ceremony — chat-only, IRC visual flair
       const lastSpeaker = ordered[ordered.length - 1];
       if (lastSpeaker) {
-        await sendAndSpeak(this.page, fmt(msg.ops, lastSpeaker), this.lang);
+        await sendChatMessage(this.page, fmt(msg.ops, lastSpeaker));
       }
 
       // Story 2.6.1: Scrum board prompt

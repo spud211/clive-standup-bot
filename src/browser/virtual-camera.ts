@@ -1,15 +1,27 @@
 import { type Page } from "playwright";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { selectors } from "./selectors.js";
+import { AssetServer } from "./asset-server.js";
+
+/** Shared asset server instance — started once, reused across sessions. */
+let assetServer: AssetServer | null = null;
+
+async function getAssetServer(): Promise<AssetServer> {
+  if (!assetServer) {
+    assetServer = new AssetServer();
+    await assetServer.start();
+  }
+  return assetServer;
+}
 
 /**
  * Install a getUserMedia override that serves either a looping video or a
  * static image as a fake camera stream. Must be called via page.addInitScript
  * BEFORE the page navigates to Teams.
  *
- * Video takes priority over image. The asset is embedded as a base64 data URL
- * in the init script so it doesn't need to be served over HTTP.
+ * Videos are served via a local HTTP server (no size limit).
+ * Small images are base64-encoded inline.
  */
 export async function installVirtualCamera(
   page: Page,
@@ -18,23 +30,31 @@ export async function installVirtualCamera(
   const isVideo = !!opts.videoPath;
   const assetPath = isVideo ? opts.videoPath! : opts.imagePath!;
   const absPath = resolve(assetPath);
-  const assetBuffer = await readFile(absPath);
-  const base64 = assetBuffer.toString("base64");
 
-  const ext = absPath.split(".").pop()?.toLowerCase() ?? "";
-  let mime: string;
+  let avatarUrl: string;
+
   if (isVideo) {
-    mime = ext === "webm" ? "video/webm" : "video/mp4";
+    // Serve video via local HTTP — no size limit
+    const server = await getAssetServer();
+    server.addFile("/avatar", absPath);
+    avatarUrl = server.getUrl("/avatar");
+    const fileStats = await stat(absPath);
+    console.log(`[VirtualCamera] Serving video (${(fileStats.size / 1024 / 1024).toFixed(1)}MB) from ${absPath}`);
   } else {
-    mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/png";
+    // Small images: base64 inline
+    const imageBuffer = await readFile(absPath);
+    const base64 = imageBuffer.toString("base64");
+    const ext = absPath.split(".").pop()?.toLowerCase() ?? "png";
+    const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/png";
+    avatarUrl = `data:${mime};base64,${base64}`;
+    console.log(`[VirtualCamera] Embedding image from ${absPath}`);
   }
-  const dataUrl = `data:${mime};base64,${base64}`;
 
   const mode = isVideo ? "video (loop)" : "static image";
-  console.log(`[VirtualCamera] Installing ${mode} override from ${absPath}`);
+  console.log(`[VirtualCamera] Installing ${mode} override`);
 
   await page.addInitScript(
-    ({ avatarDataUrl, isVideoMode }: { avatarDataUrl: string; isVideoMode: boolean }) => {
+    ({ avatarSrc, isVideoMode }: { avatarSrc: string; isVideoMode: boolean }) => {
       const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
       navigator.mediaDevices.getUserMedia = async function (
@@ -42,8 +62,8 @@ export async function installVirtualCamera(
       ): Promise<MediaStream> {
         if (constraints?.video) {
           const stream = isVideoMode
-            ? await createVideoStream(avatarDataUrl)
-            : await createImageStream(avatarDataUrl);
+            ? await createVideoStream(avatarSrc)
+            : await createImageStream(avatarSrc);
 
           // If audio is also requested, get real audio and merge
           if (constraints.audio) {
@@ -64,12 +84,12 @@ export async function installVirtualCamera(
       };
 
       /** Static image drawn to canvas at 5fps */
-      async function createImageStream(dataUrl: string): Promise<MediaStream> {
+      async function createImageStream(src: string): Promise<MediaStream> {
         const img = new Image();
         await new Promise<void>((res, rej) => {
           img.onload = () => res();
           img.onerror = rej;
-          img.src = dataUrl;
+          img.src = src;
         });
 
         const canvas = document.createElement("canvas");
@@ -92,12 +112,13 @@ export async function installVirtualCamera(
       }
 
       /** Looping video drawn to canvas at 30fps */
-      async function createVideoStream(dataUrl: string): Promise<MediaStream> {
+      async function createVideoStream(src: string): Promise<MediaStream> {
         const video = document.createElement("video");
-        video.src = dataUrl;
+        video.src = src;
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
+        video.crossOrigin = "anonymous";
 
         await new Promise<void>((res, rej) => {
           video.onloadeddata = () => res();
@@ -121,11 +142,10 @@ export async function installVirtualCamera(
 
         const stream = canvas.captureStream(30);
 
-        // Start playback
         try {
           await video.play();
         } catch {
-          // Autoplay might be blocked — we'll still draw frames
+          // Autoplay might be blocked
         }
 
         // Draw loop — use requestVideoFrameCallback if available, else rAF
@@ -148,7 +168,7 @@ export async function installVirtualCamera(
         return stream;
       }
     },
-    { avatarDataUrl: dataUrl, isVideoMode: isVideo },
+    { avatarSrc: avatarUrl, isVideoMode: isVideo },
   );
 
   console.log(`[VirtualCamera] getUserMedia override installed (${mode}).`);
