@@ -163,6 +163,9 @@ export async function sendChatMessage(page: Page, message: string): Promise<void
   await composeBox.click();
   await composeBox.fill(message);
 
+  // Brief pause to let Teams register the input before sending
+  await new Promise((r) => setTimeout(r, 300));
+
   // Try clicking the send button; fall back to pressing Enter
   try {
     const sendBtn = page.locator(selectors.chatSendButton);
@@ -190,8 +193,12 @@ export async function sendAndSpeak(page: Page, message: string, lang?: Language)
   if (!config.ttsEnabled) return;
 
   // Fire-and-forget — don't await
-  // Strip markdown bold and emojis so TTS doesn't try to read them
-  const plainText = message.replace(/\*\*/g, "").replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "").trim();
+  // Strip markdown bold, emojis, and variation selectors so TTS doesn't try to read them
+  const plainText = message
+    .replace(/\*\*/g, "")
+    .replace(/[\u2700-\u27BF\uFE0F\u200D\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   playAudioInMeeting(plainText, lang)
     .catch((err: unknown) => console.error("[Chat] TTS failed (chat was still sent):", err));
 }

@@ -157,6 +157,9 @@ export class SessionManager {
       await enableCamera(page);
     }
 
+    // Give Teams a moment to fully load the chat panel after joining
+    await new Promise((r) => setTimeout(r, 3000));
+
     // Send welcome and start monitoring
     await sendAndSpeak(page, pickWelcome(msg), language);
     await sendChatMessage(page, msg.commandHint);
