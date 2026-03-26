@@ -6,7 +6,9 @@ import { ChatMonitor, sendAndSpeak } from "./chat.js";
 import { Standup } from "./standup.js";
 import { installVirtualCamera, enableCamera } from "../browser/virtual-camera.js";
 import { config } from "../config.js";
-import { type Language, getMessages, startTriggers, advanceTriggers } from "../i18n/messages.js";
+import { type Language, getMessages, startTriggers, advanceTriggers, pickWelcome } from "../i18n/messages.js";
+import { CommandRegistry } from "../commands/registry.js";
+import { registerAllCommands } from "../commands/index.js";
 
 export type SessionStatus =
   | "joining"
@@ -159,12 +161,24 @@ export class SessionManager {
     }
 
     // Send welcome and start monitoring
-    await sendAndSpeak(page, msg.welcome, language);
+    await sendAndSpeak(page, pickWelcome(msg), language);
 
     session.status = "idle";
 
+    const commands = new CommandRegistry();
+    registerAllCommands(commands);
+
     chatMonitor.onMessage(async (chatMsg) => {
       const lower = chatMsg.text.toLowerCase().replace(/\s+/g, " ").trim();
+
+      // Try commands first
+      const handled = await commands.tryHandle(chatMsg.text, {
+        sender: chatMsg.sender,
+        participants: [],
+        page,
+        lang: language,
+      }, standup.isRunning);
+      if (handled) return;
 
       if (starts.some((t) => lower.includes(t))) {
         if (standup.isRunning) {

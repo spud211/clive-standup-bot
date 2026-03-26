@@ -2,7 +2,7 @@ import { type Page } from "playwright";
 import { sendAndSpeak } from "./chat.js";
 import { getParticipants } from "./participants.js";
 import { orderParticipants } from "./ordering.js";
-import { type Language, getMessages, fmt } from "../i18n/messages.js";
+import { type Language, getMessages, fmt, pickComplete } from "../i18n/messages.js";
 
 /**
  * Orchestrates a single standup round.
@@ -61,6 +61,12 @@ export class Standup {
       const ordered = orderParticipants(participants, this.lastSpeakerPattern);
       console.log(`[Standup] Order: [${ordered.join(", ")}]`);
 
+      // Story 2.5.2: Ops ceremony — give the conn to the last speaker (team lead)
+      const lastSpeaker = ordered[ordered.length - 1];
+      if (lastSpeaker) {
+        await sendAndSpeak(this.page, fmt(msg.ops, lastSpeaker), this.lang);
+      }
+
       // Story 1.5: Prompt each participant
       for (const name of ordered) {
         await sendAndSpeak(this.page, fmt(msg.prompt, name), this.lang);
@@ -73,7 +79,7 @@ export class Standup {
       }
 
       // Story 1.6: Standup complete
-      await sendAndSpeak(this.page, msg.complete, this.lang);
+      await sendAndSpeak(this.page, pickComplete(msg), this.lang);
       console.log("[Standup] Standup complete.");
     } catch (err) {
       console.error("[Standup] Error during standup:", err);

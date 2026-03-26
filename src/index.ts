@@ -5,7 +5,9 @@ import { ChatMonitor, sendAndSpeak } from "./meeting/chat.js";
 import { Standup } from "./meeting/standup.js";
 import { startApiServer } from "./api/server.js";
 import { installVirtualCamera, enableCamera } from "./browser/virtual-camera.js";
-import { getMessages, startTriggers, advanceTriggers } from "./i18n/messages.js";
+import { getMessages, startTriggers, advanceTriggers, pickWelcome } from "./i18n/messages.js";
+import { CommandRegistry } from "./commands/registry.js";
+import { registerAllCommands } from "./commands/index.js";
 
 async function main(): Promise<void> {
   console.log("=== Clive: Standup AI ===");
@@ -53,17 +55,28 @@ async function main(): Promise<void> {
   // Send welcome message and start listening for trigger
   const lang = config.language;
   const msg = getMessages(lang);
-  await sendAndSpeak(page, msg.welcome, lang);
+  await sendAndSpeak(page, pickWelcome(msg), lang);
 
   // Set up chat monitoring
   const chatMonitor = new ChatMonitor(page, config.botDisplayName);
   const standup = new Standup(page, config.botDisplayName, config.lastSpeakerName, lang);
+  const commands = new CommandRegistry();
+  registerAllCommands(commands);
 
   const starts = startTriggers[lang];
   const advances = advanceTriggers[lang];
 
   chatMonitor.onMessage(async (chatMsg) => {
     const lower = chatMsg.text.toLowerCase().replace(/\s+/g, " ").trim();
+
+    // Try commands first
+    const handled = await commands.tryHandle(chatMsg.text, {
+      sender: chatMsg.sender,
+      participants: [],
+      page,
+      lang,
+    }, standup.isRunning);
+    if (handled) return;
 
     if (starts.some((t) => lower.includes(t))) {
       if (standup.isRunning) {
