@@ -326,56 +326,233 @@
 
 ---
 
-### Story 2.5: Virtual Camera — Video Loop
-**As a** team member in a meeting
-**I want** to see Clive as a looping video rather than a static image
-**So that** Clive feels more lifelike and engaging
+## Phase 2.5 — Clive's Personality (IRC Bot Mode & Fun)
 
-**Approach:** Replace the static image canvas draw with a `<video>` element that loops a short video clip, drawing each frame to the canvas.
+### Story 2.5.1: Chat Command System
+**As a** developer
+**I want** a pluggable chat command system
+**So that** new commands can be easily added without touching the standup flow
 
 **Acceptance Criteria:**
-- New config: `AVATAR_VIDEO_PATH` env variable — path to a short video file (MP4/WebM)
-- If `AVATAR_VIDEO_PATH` is set, it takes priority over `AVATAR_IMAGE_PATH`
-- If only `AVATAR_IMAGE_PATH` is set, behaviour is unchanged (static image, as per Story 2.4)
-- If neither is set, camera stays off
-- The video is embedded as a base64 data URL in the init script (same approach as the image)
-- A hidden `<video>` element plays the clip on loop (`loop`, `muted`, `autoplay`)
-- Canvas draws the video frame using `requestAnimationFrame` for smooth playback
-- Canvas resolution matches the video's native resolution (or caps at 1280×720)
-- Stream frame rate: 30fps (canvas.captureStream(30)) for smooth video
-- Teams participants see a smoothly looping video as Clive's camera feed
-- Console logs: "[VirtualCamera] Video avatar installed (loop mode)"
-
-**Technical Notes:**
-- The video file should be short (3–10 seconds) and small (<2MB) since it's base64-encoded into the init script
-- Use `video.requestVideoFrameCallback` where available for frame-accurate drawing, falling back to `requestAnimationFrame`
-- The video must be muted to allow autoplay without user interaction (browser policy)
-- MP4 (H.264) has the best browser compatibility; WebM (VP8/VP9) is also fine
+- A `CommandRegistry` that maps command patterns to handler functions
+- Commands are detected from chat messages by the existing chat monitor
+- Commands can be prefix-based (e.g. `/slap`) or keyword-based (e.g. "good morning clive")
+- Each command handler receives: `{ sender, message, participants, sendChat }` context
+- Commands are only processed when NOT in active standup mode (don't interrupt the flow), UNLESS the command is flagged as `allowDuringStandup: true`
+- Each command also declares `speakResponse: boolean` — when `false`, the response is chat-only and NOT sent through TTS. **Most commands should be `speakResponse: false`** — Clive should only speak aloud for standup flow messages (prompts, greetings, sign-offs), not for fun/utility command responses.
+- Commands are registered in a single file (`src/commands/index.ts`) for easy browsing
+- Console logs: "[Command] /slap triggered by Steve"
 
 ---
 
-### Story 2.6: Clive Avatar Video — Create Asset
-**As a** developer setting up Clive
-**I want** a short looping video of Clive's avatar
-**So that** there's a ready-made asset to use with Story 2.5
+### Story 2.5.2: IRC Classics — /slap, /me, Ops
+**As a** team member with fond IRC memories
+**I want** classic IRC commands in our Teams standup
+**So that** standups have personality and nostalgia
+
+**Commands:**
+
+**/slap {name}**
+- Syntax: user types `/slap Steve` in chat
+- Clive responds: "🐟 {sender} slaps {target} around a bit with a large trout"
+- Variations (randomly selected):
+  - "🐟 {sender} slaps {target} around a bit with a large trout"
+  - "🧹 {sender} thwacks {target} with a well-worn broom"
+  - "🥖 {sender} gently bops {target} with a stale baguette"
+  - "📎 {sender} prods {target} with a suspiciously sentient paperclip"
+  - "🧤 {sender} challenges {target} to a duel with a velvet glove"
+- If French mode: use French equivalents ("🐟 {sender} gifle {target} avec une grosse truite")
+- If target is "Clive": "🛡️ Clive deflects the blow. Nice try, {sender}."
+- `allowDuringStandup: false`
+
+**/me {action}**
+- Syntax: user types `/me is having a coffee`
+- Clive responds: "✨ {sender} is having a coffee"
+- `allowDuringStandup: true`
+
+**Ops on standup start:**
+- When "start daily" is triggered and the order is decided, Clive posts: "⚡ Mode +o {lastSpeakerName} — you have the conn today, {firstName}. Keep us honest."
+- French: "⚡ Mode +o {lastSpeakerName} — c'est toi le chef aujourd'hui, {firstName}. Garde-nous sur les rails."
+- This is always the `LAST_SPEAKER_NAME` person (the team lead)
+- Posted after the participant order is announced, before the first person is prompted
+
+---
+
+### Story 2.5.3: Clive's Greetings & Banter
+**As a** team member
+**I want** Clive to have personality in his greetings and responses
+**So that** he feels like a team member, not a script
 
 **Acceptance Criteria:**
-- A short video file (3–10 seconds) committed to `assets/clive-avatar.mp4`
-- The video should loop seamlessly (first and last frames match, or use a back-and-forth animation)
-- File size under 2MB (will be base64-encoded)
-- Suggestions for creating the video:
-  - Use `ffmpeg` to create a subtle animation from the static image (e.g. gentle zoom/pulse, colour shift, floating particles)
-  - Use a free AI video tool to animate the avatar image
-  - Record a short screen capture of an animated avatar
-- `.env.example` updated with `AVATAR_VIDEO_PATH=assets/clive-avatar.mp4`
-- Console logs confirm the video file is found and its duration/size
 
-**Technical Notes:**
-- ffmpeg example for a gentle breathing/pulse effect from a static image:
+**Dynamic greetings** — the welcome message on join is randomly selected from a pool:
+- English pool:
+  - "Good morning team! Type **start daily** when you're ready."
+  - "Morning all. Kettle's on, standups wait for no one. Type **start daily** when you're ready."
+  - "Right then. Another day, another standup. Type **start daily** when you're ready."
+  - "Good morning! I've been here since 5am. Just kidding. Type **start daily** when you're ready."
+  - Monday special: "Happy Monday team. Let's ease into it. Type **start daily** when you're ready."
+  - Friday special: "Happy Friday! Let's keep this one snappy. Type **start daily** when you're ready."
+- French pool (equivalent variety)
+- All greetings end with the trigger instruction
+
+**Responses to being addressed:**
+- If someone types "thanks clive", "cheers clive", "good job clive", or similar in chat:
+  - Random response from: "Just doing my job. ☕", "You're welcome. That'll be £5.", "All in a day's work.", "I live to serve. Literally."
+- If someone types "good morning clive" or "hi clive":
+  - Random response from: "Morning! 👋", "Hello! Ready when you are.", "Morning. I've had three coffees already."
+- `allowDuringStandup: true` for greetings
+
+**Post-standup sign-off** — the wrap-up message also has variety:
+- "That's everyone! Thanks team, have a great day. 👋"
+- "And we're done! {minutes} minutes — not bad. Have a good one. 👋"
+- "All done. Go forth and be productive. Or don't. I'm a bot, not your manager. 👋"
+- Friday: "That's a wrap! Enjoy the weekend, you've earned it. 👋"
+
+---
+
+### Story 2.5.4: Fun Commands — Timers, Polls, Quotes
+**As a** team member
+**I want** useful and fun utility commands
+**So that** Clive is helpful beyond just the standup
+
+**Commands:**
+
+**/timer {minutes} {label}**
+- Syntax: `/timer 5 coffee break`
+- Clive responds: "⏱️ Timer set: 5 minutes — coffee break"
+- After 5 minutes, Clive posts: "⏱️ Time's up! coffee break is over."
+- Also speaks via TTS if enabled
+- Multiple timers can run concurrently
+- `/timer cancel` cancels all active timers
+- `allowDuringStandup: true`
+
+**/poll {question} | {option1} | {option2} | ...**
+- Syntax: `/poll Lunch? | Pizza | Sushi | Sandwiches`
+- Clive posts:
   ```
-  ffmpeg -loop 1 -i assets/clive-avatar.png -vf "zoompan=z='1+0.02*sin(2*PI*t/4)':d=120:fps=30:s=640x360" -t 4 -c:v libx264 -pix_fmt yuv420p assets/clive-avatar.mp4
+  📊 **Poll: Lunch?**
+  1️⃣ Pizza
+  2️⃣ Sushi
+  3️⃣ Sandwiches
+  Reply with the number to vote!
   ```
-- This creates a 4-second clip with a gentle zoom in/out cycle that loops smoothly
+- Clive tracks votes by watching for "1", "2", "3" replies
+- `/poll results` shows current tally
+- `/poll close` shows final results and closes
+- `allowDuringStandup: false`
+
+**/quote**
+- Clive posts a random motivational (or slightly sarcastic) quote
+- Pool of ~20 quotes, mix of genuine and tongue-in-cheek:
+  - "The only way to do great work is to love what you do. — Steve Jobs"
+  - "It works on my machine. — Every developer ever"
+  - "There are only two hard things in computer science: cache invalidation, naming things, and off-by-one errors."
+  - "A meeting is an event where minutes are kept and hours are lost."
+- `allowDuringStandup: false`
+
+**/8ball {question}**
+- Classic magic 8-ball
+- Clive responds: "🎱 {random response}" from the classic 20 responses
+- `allowDuringStandup: false`
+
+**/flip**
+- Coin flip
+- Clive responds: "🪙 Heads!" or "🪙 Tails!"
+- `allowDuringStandup: true`
+
+**/help**
+- Lists all available commands with brief descriptions
+- `allowDuringStandup: true`
+
+---
+
+### Story 2.5.5: Conversate Mode
+**As a** team lead
+**I want** a "conversate" mode where Clive opens the floor for free discussion
+**So that** we can have structured open discussions after or instead of the standup
+
+**Acceptance Criteria:**
+- Triggered by typing `/conversate {topic}` or `/discuss {topic}` in chat
+- Clive posts: "💬 **Open discussion: {topic}** — everyone jump in. Type **/end** when we're done."
+- Clive starts a timer (configurable, default 10 minutes) and posts a warning at 2 minutes remaining: "⏱️ 2 minutes left on the discussion."
+- At time limit: "⏱️ Time's up on **{topic}**. Type **/extend {minutes}** to keep going or **/end** to wrap up."
+- `/end` posts: "💬 Discussion closed. Back to business."
+- If transcription is active (Phase 3A), Clive posts a brief LLM-generated summary of the discussion when it ends
+- `allowDuringStandup: false` — can't start during standup, but standup can follow after discussion ends
+- French translations for all messages
+
+---
+
+## Phase 2.6 — Scrum Board Prompt
+
+### Story 2.6.1: Prompt Lead to Share Board
+**As a** team lead
+**I want** Clive to remind me to share my screen with the board
+**So that** I don't forget and the team can see the board during standup
+
+**Acceptance Criteria:**
+- New config variable `SCRUM_BOARD_PROMPT` — boolean, default `true`
+- When "start daily" is triggered, after the ops ceremony (Story 2.5.2) and before prompting the first speaker, Clive posts: "🖥️ **{leadName}**, fancy sharing the board? I'll wait 10 seconds, or type **go** to skip."
+- Clive waits up to 10 seconds for the lead to start sharing (or for anyone to type "go" / "skip" in chat)
+- After the wait (or on "go"/"skip"), standup proceeds as normal
+- If `SCRUM_BOARD_PROMPT=false`, skip this step entirely
+- French: "🖥️ **{leadName}**, tu veux partager le board ? J'attends 10 secondes, ou tape **go** pour passer."
+- `SCRUM_BOARD_URL` config variable (optional) — if set, Clive includes the link in the message: "🖥️ **{leadName}**, fancy sharing the board? ({url}) I'll wait 10 seconds, or type **go** to skip."
+
+---
+
+## Phase 2.7 — TTS Quality Upgrade
+
+### Story 2.7.1: ElevenLabs TTS Integration
+**As a** developer
+**I want** to use ElevenLabs for high-quality TTS
+**So that** Clive sounds natural and has a distinctive voice
+
+**Acceptance Criteria:**
+- New TTS provider option: `TTS_PROVIDER=elevenlabs`
+- Uses ElevenLabs API to generate speech audio
+- Configurable voice ID via `ELEVENLABS_VOICE_ID` env variable
+- Configurable API key via `ELEVENLABS_API_KEY` env variable
+- Audio returned as MP3/WAV, played through the existing virtual audio pipeline
+- Falls back to `say`/`espeak` if ElevenLabs API fails
+- Latency target: audio should start playing within 1 second of request (use streaming if available)
+- Console logs: "[TTS] ElevenLabs: generated 2.3s of audio in 450ms"
+
+**Configuration:**
+
+| Variable | Description | Example |
+|---|---|---|
+| `TTS_PROVIDER` | TTS engine: `system` (say/espeak), `elevenlabs`, `piper` | `system` |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key | `xi_...` |
+| `ELEVENLABS_VOICE_ID` | ElevenLabs voice ID | `21m00Tcm4TlvDq8ikWAM` |
+
+**Notes:**
+- ElevenLabs has a streaming API that returns audio chunks as they're generated — use this to minimise latency
+- For Clive's character, browse ElevenLabs voice library for a middle-aged British male voice, or create a custom one
+- Consider caching common phrases ("Good morning team", "you're up", "Thanks") to avoid repeated API calls
+
+---
+
+### Story 2.7.2: Piper TTS Integration (Offline Alternative)
+**As a** developer
+**I want** a high-quality offline TTS option
+**So that** Clive sounds good without needing a cloud API
+
+**Acceptance Criteria:**
+- New TTS provider option: `TTS_PROVIDER=piper`
+- Uses Piper (local neural TTS) to generate speech
+- Configurable voice model via `PIPER_VOICE` env variable (default: `en_GB-alan-medium`)
+- Piper binary and voice model are either bundled in Docker or downloaded on first run
+- Audio generated as WAV, played through existing virtual audio pipeline
+- Works fully offline — no API calls needed
+- French voice support: `fr_FR-upmc-medium` or similar
+- Console logs: "[TTS] Piper: generated 2.1s of audio in 180ms"
+
+**Notes:**
+- Piper is fast (~100-200ms for a sentence) and sounds significantly better than espeak
+- Voice models are ~60-100MB each
+- Install via pip (`piper-tts`) or download binary from GitHub releases
 
 ---
 

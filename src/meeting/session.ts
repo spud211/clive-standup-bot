@@ -150,10 +150,9 @@ export class SessionManager {
 
     // Navigate and join
     await navigateToMeeting(page, meetingUrl);
+    await joinMeeting(page, botName);
     session.status = "in-meeting";
     console.log(`[Session ${id}] Joined meeting.`);
-
-    await joinMeeting(page, botName);
 
     // Enable camera after joining
     if (hasAvatar) {
@@ -174,7 +173,6 @@ export class SessionManager {
       // Try commands first
       const handled = await commands.tryHandle(chatMsg.text, {
         sender: chatMsg.sender,
-        participants: [],
         page,
         lang: language,
       }, standup.isRunning);

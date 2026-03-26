@@ -5,6 +5,8 @@ import { orderParticipants } from "./ordering.js";
 import { type Language, getMessages, fmt, pickComplete } from "../i18n/messages.js";
 import { config } from "../config.js";
 
+const BOARD_PROMPT_TIMEOUT_MS = 10_000;
+
 /**
  * Orchestrates a single standup round.
  *
@@ -83,8 +85,8 @@ export class Standup {
           ? fmt(msg.boardPromptWithUrl, lastSpeaker, { url: config.scrumBoardUrl })
           : fmt(msg.boardPrompt, lastSpeaker);
         await sendAndSpeak(this.page, boardMsg, this.lang);
-        console.log("[Standup] Waiting for board share (10s or 'go'/'skip')...");
-        await this.waitForBoardSkip(10_000);
+        console.log("[Standup] Waiting for board share or 'go'/'skip'...");
+        await this.waitForBoardSkip(BOARD_PROMPT_TIMEOUT_MS);
       }
 
       // Story 1.5: Prompt each participant
@@ -109,7 +111,11 @@ export class Standup {
     }
   }
 
-  /** Returns a promise that resolves when advance() is called. */
+  /**
+   * Returns a promise that resolves when advance() is called.
+   * Intentionally has no timeout — spec says wait indefinitely (POC scope).
+   * Phase 3B will add voice-based turn detection as an alternative.
+   */
   private waitForAdvance(): Promise<void> {
     return new Promise<void>((resolve) => {
       this.advanceResolve = resolve;

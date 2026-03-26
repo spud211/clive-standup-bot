@@ -1,9 +1,6 @@
 import { type CommandDef, type CommandContext } from "./registry.js";
 import { type Language } from "../i18n/messages.js";
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { pick } from "../utils.js";
 
 // ---------------------------------------------------------------------------
 // /slap {name}

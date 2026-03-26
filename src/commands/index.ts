@@ -2,18 +2,19 @@ import { type CommandRegistry } from "./registry.js";
 import { slapCommand, meCommand } from "./irc.js";
 import { greetingCommand, thanksCommand } from "./banter.js";
 import {
-  timerCommand,
-  pollCommand,
-  pollVoteCommand,
+  createTimerCommand,
+  createPollCommands,
   quoteCommand,
   eightBallCommand,
   flipCommand,
   helpCommand,
 } from "./fun.js";
-import { conversateCommand, endCommand, extendCommand } from "./conversate.js";
+import { createDiscussionCommands } from "./conversate.js";
 
 /**
  * Register all commands with the given registry.
+ * Factory functions are called here so each registry gets its own state
+ * (safe for multi-session API mode).
  * Add new commands here — this is the single place to browse all available commands.
  */
 export function registerAllCommands(registry: CommandRegistry): void {
@@ -25,17 +26,19 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(greetingCommand);
   registry.register(thanksCommand);
 
-  // Fun commands (Story 2.5.4)
-  registry.register(timerCommand);
-  registry.register(pollCommand);
-  registry.register(pollVoteCommand);
+  // Fun commands (Story 2.5.4) — stateful commands use factories
+  registry.register(createTimerCommand());
+  const [pollCmd, pollVoteCmd] = createPollCommands();
+  registry.register(pollCmd);
+  registry.register(pollVoteCmd);
   registry.register(quoteCommand);
   registry.register(eightBallCommand);
   registry.register(flipCommand);
   registry.register(helpCommand);
 
   // Conversate mode (Story 2.5.5)
-  registry.register(conversateCommand);
-  registry.register(endCommand);
-  registry.register(extendCommand);
+  const [conversateCmd, endCmd, extendCmd] = createDiscussionCommands();
+  registry.register(conversateCmd);
+  registry.register(endCmd);
+  registry.register(extendCmd);
 }

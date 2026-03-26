@@ -88,9 +88,7 @@ export function getMessages(lang: Language): Messages {
   return allMessages[lang];
 }
 
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { pick } from "../utils.js";
 
 /** Pick a welcome message, with day-of-week specials. */
 export function pickWelcome(msg: Messages): string {

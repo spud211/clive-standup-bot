@@ -1,9 +1,6 @@
 import { type CommandDef, type CommandContext } from "./registry.js";
 import { type Language } from "../i18n/messages.js";
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { pick } from "../utils.js";
 
 // ---------------------------------------------------------------------------
 // Greeting — "good morning clive", "hi clive", etc.
@@ -67,7 +64,7 @@ const thanksResponses: Record<Language, string[]> = {
 export const thanksCommand: CommandDef = {
   name: "thanks",
   allowDuringStandup: true,
-  speakResponse: false,
+  speakResponse: true,
   match: (text) => thanksPatterns.some((p) => p.test(text)),
   async handle(ctx: CommandContext) {
     await ctx.respond(pick(thanksResponses[ctx.lang]));

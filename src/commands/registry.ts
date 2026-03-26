@@ -6,7 +6,6 @@ import { sendChatMessage, sendAndSpeak } from "../meeting/chat.js";
 export interface CommandContext {
   sender: string;
   message: string;
-  participants: string[];
   page: Page;
   lang: Language;
   /** Send a response — routed to chat-only or chat+TTS based on speakResponse flag. */

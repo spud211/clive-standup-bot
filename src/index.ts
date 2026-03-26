@@ -72,7 +72,6 @@ async function main(): Promise<void> {
     // Try commands first
     const handled = await commands.tryHandle(chatMsg.text, {
       sender: chatMsg.sender,
-      participants: [],
       page,
       lang,
     }, standup.isRunning);

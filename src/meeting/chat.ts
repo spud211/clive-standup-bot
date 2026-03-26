@@ -101,7 +101,10 @@ export class ChatMonitor {
       console.log(`[Chat] ${sender}: ${text}`);
 
       if (this.handler) {
-        this.handler({ sender, text });
+        // IMPORTANT: fire-and-forget — do NOT await. The standup flow
+        // blocks inside run() waiting for advance(), which is called by
+        // a subsequent onMessage invocation. Awaiting here deadlocks.
+        void this.handler({ sender, text });
       }
     }
 

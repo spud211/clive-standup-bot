@@ -1,12 +1,12 @@
 import { type CommandDef, type CommandContext } from "./registry.js";
 import { sendAndSpeak, sendChatMessage } from "../meeting/chat.js";
 import { type Language } from "../i18n/messages.js";
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { pick } from "../utils.js";
 
 const numberEmojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+
+const MAX_TIMER_MINUTES = 120;
+const TIMER_WARNING_THRESHOLD_MINUTES = 3;
 
 // ---------------------------------------------------------------------------
 // /timer {minutes} {label}
@@ -18,69 +18,78 @@ interface ActiveTimer {
   warningTimeout?: ReturnType<typeof setTimeout>;
 }
 
-const activeTimers: ActiveTimer[] = [];
+export function createTimerCommand(): CommandDef {
+  const activeTimers: ActiveTimer[] = [];
 
-export const timerCommand: CommandDef = {
-  name: "/timer",
-  allowDuringStandup: true,
-  speakResponse: false,
-  match: (text) => text.startsWith("/timer"),
-  async handle(ctx: CommandContext) {
-    const args = ctx.message.replace(/^\/timer\s*/i, "").trim();
+  return {
+    name: "/timer",
+    allowDuringStandup: true,
+    speakResponse: false,
+    match: (text) => text.startsWith("/timer"),
+    async handle(ctx: CommandContext) {
+      const args = ctx.message.replace(/^\/timer\s*/i, "").trim();
 
-    if (args.toLowerCase() === "cancel") {
-      if (activeTimers.length === 0) {
-        await ctx.respond("⏱️ No active timers to cancel.");
+      if (args.toLowerCase() === "cancel") {
+        if (activeTimers.length === 0) {
+          await ctx.respond("⏱️ No active timers to cancel.");
+          return;
+        }
+        const count = activeTimers.length;
+        for (const t of activeTimers) {
+          clearTimeout(t.timeout);
+          if (t.warningTimeout) clearTimeout(t.warningTimeout);
+        }
+        activeTimers.length = 0;
+        await ctx.respond(`⏱️ Cancelled ${count} timer(s).`);
         return;
       }
-      const count = activeTimers.length;
-      for (const t of activeTimers) {
-        clearTimeout(t.timeout);
-        if (t.warningTimeout) clearTimeout(t.warningTimeout);
+
+      const match = args.match(/^(\d+)\s*(.*)?$/);
+      if (!match) {
+        await ctx.respond("⏱️ Usage: /timer {minutes} {label}");
+        return;
       }
-      activeTimers.length = 0;
-      await ctx.respond(`⏱️ Cancelled ${count} timer(s).`);
-      return;
-    }
 
-    const match = args.match(/^(\d+)\s*(.*)?$/);
-    if (!match) {
-      await ctx.respond("⏱️ Usage: /timer {minutes} {label}");
-      return;
-    }
+      const minutes = parseInt(match[1], 10);
+      const label = match[2]?.trim() || "timer";
 
-    const minutes = parseInt(match[1], 10);
-    const label = match[2]?.trim() || "timer";
+      if (minutes < 1 || minutes > MAX_TIMER_MINUTES) {
+        await ctx.respond(`⏱️ Timer must be between 1 and ${MAX_TIMER_MINUTES} minutes.`);
+        return;
+      }
 
-    if (minutes < 1 || minutes > 120) {
-      await ctx.respond("⏱️ Timer must be between 1 and 120 minutes.");
-      return;
-    }
+      await ctx.respond(`⏱️ Timer set: ${minutes} minute${minutes > 1 ? "s" : ""} — ${label}`);
 
-    await ctx.respond(`⏱️ Timer set: ${minutes} minute${minutes > 1 ? "s" : ""} — ${label}`);
+      const timer: ActiveTimer = {
+        label,
+        timeout: setTimeout(async () => {
+          try {
+            // Timer expiry is spoken aloud to get attention
+            await sendAndSpeak(ctx.page, `⏱️ Time's up! ${label} is over.`, ctx.lang);
+          } catch (err) {
+            console.error(`[Timer] Failed to send expiry message for "${label}":`, err);
+          }
+          const idx = activeTimers.indexOf(timer);
+          if (idx >= 0) activeTimers.splice(idx, 1);
+          console.log(`[Timer] "${label}" completed.`);
+        }, minutes * 60_000),
+      };
 
-    const timer: ActiveTimer = {
-      label,
-      timeout: setTimeout(async () => {
-        // Timer expiry is spoken aloud to get attention
-        await sendAndSpeak(ctx.page, `⏱️ Time's up! ${label} is over.`, ctx.lang);
-        const idx = activeTimers.indexOf(timer);
-        if (idx >= 0) activeTimers.splice(idx, 1);
-        console.log(`[Timer] "${label}" completed.`);
-      }, minutes * 60_000),
-    };
+      if (minutes > TIMER_WARNING_THRESHOLD_MINUTES) {
+        timer.warningTimeout = setTimeout(async () => {
+          try {
+            await sendChatMessage(ctx.page, `⏱️ 2 minutes left on ${label}.`);
+          } catch (err) {
+            console.error(`[Timer] Failed to send warning for "${label}":`, err);
+          }
+        }, (minutes - 2) * 60_000);
+      }
 
-    // Warning at 2 minutes remaining if timer is > 3 minutes
-    if (minutes > 3) {
-      timer.warningTimeout = setTimeout(async () => {
-        await sendChatMessage(ctx.page, `⏱️ 2 minutes left on ${label}.`);
-      }, (minutes - 2) * 60_000);
-    }
-
-    activeTimers.push(timer);
-    console.log(`[Timer] "${label}" set for ${minutes} minutes.`);
-  },
-};
+      activeTimers.push(timer);
+      console.log(`[Timer] "${label}" set for ${minutes} minutes.`);
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // /poll {question} | {option1} | {option2} | ...
@@ -91,88 +100,6 @@ interface ActivePoll {
   options: string[];
   votes: Map<string, number>; // sender → option index
 }
-
-let activePoll: ActivePoll | null = null;
-
-export const pollCommand: CommandDef = {
-  name: "/poll",
-  allowDuringStandup: false,
-  speakResponse: false,
-  match: (text) => text.startsWith("/poll"),
-  async handle(ctx: CommandContext) {
-    const args = ctx.message.replace(/^\/poll\s*/i, "").trim().toLowerCase();
-
-    if (args === "results") {
-      if (!activePoll) {
-        await ctx.respond("📊 No active poll.");
-        return;
-      }
-      await ctx.respond(formatPollResults(activePoll, false));
-      return;
-    }
-
-    if (args === "close") {
-      if (!activePoll) {
-        await ctx.respond("📊 No active poll to close.");
-        return;
-      }
-      await ctx.respond(formatPollResults(activePoll, true));
-      activePoll = null;
-      return;
-    }
-
-    // Parse new poll: /poll Question | Option1 | Option2
-    const rawArgs = ctx.message.replace(/^\/poll\s*/i, "").trim();
-    const parts = rawArgs.split("|").map((p) => p.trim()).filter(Boolean);
-    if (parts.length < 3) {
-      await ctx.respond("📊 Usage: /poll Question | Option1 | Option2 | ...");
-      return;
-    }
-
-    const question = parts[0];
-    const options = parts.slice(1);
-
-    if (options.length > 10) {
-      await ctx.respond("📊 Maximum 10 options per poll.");
-      return;
-    }
-
-    activePoll = { question, options, votes: new Map() };
-
-    const lines = [`📊 **Poll: ${question}**`];
-    options.forEach((opt, i) => {
-      lines.push(`${numberEmojis[i]} ${opt}`);
-    });
-    lines.push("Reply with the number to vote!");
-
-    await ctx.respond(lines.join("\n"));
-    console.log(`[Poll] Started: "${question}" with ${options.length} options.`);
-  },
-};
-
-/** Command to capture vote numbers (1-10) when a poll is active. */
-export const pollVoteCommand: CommandDef = {
-  name: "poll-vote",
-  allowDuringStandup: false,
-  speakResponse: false,
-  match: (text) => {
-    if (!activePoll) return false;
-    const num = parseInt(text.trim(), 10);
-    return num >= 1 && num <= (activePoll?.options.length ?? 0);
-  },
-  async handle(ctx: CommandContext) {
-    if (!activePoll) return;
-    const num = parseInt(ctx.message.trim(), 10);
-    const prev = activePoll.votes.get(ctx.sender);
-    activePoll.votes.set(ctx.sender, num - 1);
-    if (prev !== undefined) {
-      console.log(`[Poll] ${ctx.sender} changed vote from ${prev + 1} to ${num}`);
-    } else {
-      console.log(`[Poll] ${ctx.sender} voted ${num}`);
-    }
-    await ctx.respond(`📊 ${ctx.sender} voted for ${activePoll.options[num - 1]}.`);
-  },
-};
 
 function formatPollResults(poll: ActivePoll, isFinal: boolean): string {
   const tally = new Array<number>(poll.options.length).fill(0);
@@ -188,6 +115,93 @@ function formatPollResults(poll: ActivePoll, isFinal: boolean): string {
   });
   lines.push(`Total: ${total} vote${total !== 1 ? "s" : ""}`);
   return lines.join("\n");
+}
+
+/** Creates /poll and poll-vote commands that share state. */
+export function createPollCommands(): [CommandDef, CommandDef] {
+  let activePoll: ActivePoll | null = null;
+
+  const pollCommand: CommandDef = {
+    name: "/poll",
+    allowDuringStandup: false,
+    speakResponse: false,
+    match: (text) => text.startsWith("/poll"),
+    async handle(ctx: CommandContext) {
+      const rawArgs = ctx.message.replace(/^\/poll\s*/i, "").trim();
+      const lowerArgs = rawArgs.toLowerCase();
+
+      // Check sub-commands only if they're the ENTIRE argument (not part of a question)
+      if (lowerArgs === "results") {
+        if (!activePoll) {
+          await ctx.respond("📊 No active poll.");
+          return;
+        }
+        await ctx.respond(formatPollResults(activePoll, false));
+        return;
+      }
+
+      if (lowerArgs === "close") {
+        if (!activePoll) {
+          await ctx.respond("📊 No active poll to close.");
+          return;
+        }
+        await ctx.respond(formatPollResults(activePoll, true));
+        activePoll = null;
+        return;
+      }
+
+      // Parse new poll: /poll Question | Option1 | Option2
+      const parts = rawArgs.split("|").map((p) => p.trim()).filter(Boolean);
+      if (parts.length < 3) {
+        await ctx.respond("📊 Usage: /poll Question | Option1 | Option2 | ...");
+        return;
+      }
+
+      const question = parts[0];
+      const options = parts.slice(1);
+
+      if (options.length > 10) {
+        await ctx.respond("📊 Maximum 10 options per poll.");
+        return;
+      }
+
+      activePoll = { question, options, votes: new Map() };
+
+      const lines = [`📊 **Poll: ${question}**`];
+      options.forEach((opt, i) => {
+        lines.push(`${numberEmojis[i]} ${opt}`);
+      });
+      lines.push("Reply with the number to vote!");
+
+      await ctx.respond(lines.join("\n"));
+      console.log(`[Poll] Started: "${question}" with ${options.length} options.`);
+    },
+  };
+
+  const pollVoteCommand: CommandDef = {
+    name: "poll-vote",
+    allowDuringStandup: false,
+    speakResponse: false,
+    match: (text) => {
+      if (!activePoll) return false;
+      const num = parseInt(text.trim(), 10);
+      return num >= 1 && num <= activePoll.options.length;
+    },
+    async handle(ctx: CommandContext) {
+      if (!activePoll) return;
+      const num = parseInt(ctx.message.trim(), 10);
+      const prev = activePoll.votes.get(ctx.sender);
+      activePoll.votes.set(ctx.sender, num - 1);
+      if (prev !== undefined) {
+        console.log(`[Poll] ${ctx.sender} changed vote from ${prev + 1} to ${num}`);
+      } else {
+        console.log(`[Poll] ${ctx.sender} voted ${num}`);
+      }
+      await ctx.respond(`📊 ${ctx.sender} voted for ${activePoll.options[num - 1]}.`);
+    },
+  };
+
+  return [pollCommand, pollVoteCommand];
 }
 
 // ---------------------------------------------------------------------------
