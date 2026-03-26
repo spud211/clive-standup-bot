@@ -33,8 +33,12 @@ async function main(): Promise<void> {
   const page = await context.newPage();
 
   // Install virtual camera override BEFORE navigation (needs to be in place when Teams requests camera)
-  if (config.avatarImagePath) {
-    await installVirtualCamera(page, config.avatarImagePath);
+  const hasAvatar = !!(config.avatarVideoPath || config.avatarImagePath);
+  if (hasAvatar) {
+    await installVirtualCamera(page, {
+      videoPath: config.avatarVideoPath || undefined,
+      imagePath: config.avatarImagePath || undefined,
+    });
   }
 
   // Navigate and join
@@ -42,7 +46,7 @@ async function main(): Promise<void> {
   await joinMeeting(page, config.botDisplayName);
 
   // Enable camera after joining so participants see the avatar
-  if (config.avatarImagePath) {
+  if (hasAvatar) {
     await enableCamera(page);
   }
 

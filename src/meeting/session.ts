@@ -138,8 +138,12 @@ export class SessionManager {
     const advances = advanceTriggers[language];
 
     // Install virtual camera before navigation
-    if (config.avatarImagePath) {
-      await installVirtualCamera(page, config.avatarImagePath);
+    const hasAvatar = !!(config.avatarVideoPath || config.avatarImagePath);
+    if (hasAvatar) {
+      await installVirtualCamera(page, {
+        videoPath: config.avatarVideoPath || undefined,
+        imagePath: config.avatarImagePath || undefined,
+      });
     }
 
     // Navigate and join
@@ -150,7 +154,7 @@ export class SessionManager {
     await joinMeeting(page, botName);
 
     // Enable camera after joining
-    if (config.avatarImagePath) {
+    if (hasAvatar) {
       await enableCamera(page);
     }
 

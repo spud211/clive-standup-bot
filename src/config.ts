@@ -18,5 +18,6 @@ export const config = {
   ttsVoiceFr: process.env.TTS_VOICE_FR ?? "Thomas",
   ttsRate: process.env.TTS_RATE ? parseInt(process.env.TTS_RATE, 10) : undefined,
   avatarImagePath: process.env.AVATAR_IMAGE_PATH ?? "",
+  avatarVideoPath: process.env.AVATAR_VIDEO_PATH ?? "",
   audioDevice: process.env.AUDIO_DEVICE ?? "BlackHole 2ch",
 };

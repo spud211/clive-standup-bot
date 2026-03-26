@@ -326,6 +326,59 @@
 
 ---
 
+### Story 2.5: Virtual Camera — Video Loop
+**As a** team member in a meeting
+**I want** to see Clive as a looping video rather than a static image
+**So that** Clive feels more lifelike and engaging
+
+**Approach:** Replace the static image canvas draw with a `<video>` element that loops a short video clip, drawing each frame to the canvas.
+
+**Acceptance Criteria:**
+- New config: `AVATAR_VIDEO_PATH` env variable — path to a short video file (MP4/WebM)
+- If `AVATAR_VIDEO_PATH` is set, it takes priority over `AVATAR_IMAGE_PATH`
+- If only `AVATAR_IMAGE_PATH` is set, behaviour is unchanged (static image, as per Story 2.4)
+- If neither is set, camera stays off
+- The video is embedded as a base64 data URL in the init script (same approach as the image)
+- A hidden `<video>` element plays the clip on loop (`loop`, `muted`, `autoplay`)
+- Canvas draws the video frame using `requestAnimationFrame` for smooth playback
+- Canvas resolution matches the video's native resolution (or caps at 1280×720)
+- Stream frame rate: 30fps (canvas.captureStream(30)) for smooth video
+- Teams participants see a smoothly looping video as Clive's camera feed
+- Console logs: "[VirtualCamera] Video avatar installed (loop mode)"
+
+**Technical Notes:**
+- The video file should be short (3–10 seconds) and small (<2MB) since it's base64-encoded into the init script
+- Use `video.requestVideoFrameCallback` where available for frame-accurate drawing, falling back to `requestAnimationFrame`
+- The video must be muted to allow autoplay without user interaction (browser policy)
+- MP4 (H.264) has the best browser compatibility; WebM (VP8/VP9) is also fine
+
+---
+
+### Story 2.6: Clive Avatar Video — Create Asset
+**As a** developer setting up Clive
+**I want** a short looping video of Clive's avatar
+**So that** there's a ready-made asset to use with Story 2.5
+
+**Acceptance Criteria:**
+- A short video file (3–10 seconds) committed to `assets/clive-avatar.mp4`
+- The video should loop seamlessly (first and last frames match, or use a back-and-forth animation)
+- File size under 2MB (will be base64-encoded)
+- Suggestions for creating the video:
+  - Use `ffmpeg` to create a subtle animation from the static image (e.g. gentle zoom/pulse, colour shift, floating particles)
+  - Use a free AI video tool to animate the avatar image
+  - Record a short screen capture of an animated avatar
+- `.env.example` updated with `AVATAR_VIDEO_PATH=assets/clive-avatar.mp4`
+- Console logs confirm the video file is found and its duration/size
+
+**Technical Notes:**
+- ffmpeg example for a gentle breathing/pulse effect from a static image:
+  ```
+  ffmpeg -loop 1 -i assets/clive-avatar.png -vf "zoompan=z='1+0.02*sin(2*PI*t/4)':d=120:fps=30:s=640x360" -t 4 -c:v libx264 -pix_fmt yuv420p assets/clive-avatar.mp4
+  ```
+- This creates a 4-second clip with a gentle zoom in/out cycle that loops smoothly
+
+---
+
 ## Phase 3A — Audio Capture + Continuous Transcription
 
 ### Story 3A.1: Audio Capture from Browser Tab
