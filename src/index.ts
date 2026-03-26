@@ -5,7 +5,7 @@ import { ChatMonitor, sendAndSpeak, sendChatMessage } from "./meeting/chat.js";
 import { Standup } from "./meeting/standup.js";
 import { startApiServer } from "./api/server.js";
 import { installVirtualCamera, enableCamera } from "./browser/virtual-camera.js";
-import { getMessages, startTriggers, advanceTriggers, pickWelcome } from "./i18n/messages.js";
+import { getMessages, pickWelcome } from "./i18n/messages.js";
 import { CommandRegistry } from "./commands/registry.js";
 import { registerAllCommands } from "./commands/index.js";
 
@@ -62,39 +62,14 @@ async function main(): Promise<void> {
   const chatMonitor = new ChatMonitor(page, config.botDisplayName);
   const standup = new Standup(page, config.botDisplayName, config.lastSpeakerName, lang);
   const commands = new CommandRegistry();
-  registerAllCommands(commands);
-
-  const starts = startTriggers[lang];
-  const advances = advanceTriggers[lang];
+  registerAllCommands(commands, standup);
 
   chatMonitor.onMessage(async (chatMsg) => {
-    const lower = chatMsg.text.toLowerCase().replace(/\s+/g, " ").trim();
-
-    // Try commands first
-    const handled = await commands.tryHandle(chatMsg.text, {
+    await commands.tryHandle(chatMsg.text, {
       sender: chatMsg.sender,
       page,
       lang,
     }, standup.isRunning);
-    if (handled) return;
-
-    if (starts.some((t) => lower.includes(t))) {
-      if (standup.isRunning) {
-        console.log("[Main] Standup already running — ignoring start trigger.");
-        return;
-      }
-      console.log(`[Main] Standup triggered by ${chatMsg.sender}`);
-      await standup.run();
-    }
-
-    if (standup.isRunning) {
-      if (lower === "go" || lower === "skip") {
-        standup.skipBoard();
-      }
-      if (advances.some((t) => lower.includes(t))) {
-        standup.advance();
-      }
-    }
   });
 
   chatMonitor.start();

@@ -1,4 +1,5 @@
 import { type CommandRegistry } from "./registry.js";
+import { type Standup } from "../meeting/standup.js";
 import { slapCommand, meCommand } from "./irc.js";
 import { greetingCommand, thanksCommand } from "./banter.js";
 import {
@@ -10,6 +11,7 @@ import {
   helpCommand,
 } from "./fun.js";
 import { createDiscussionCommands } from "./conversate.js";
+import { createStandupCommands } from "./standup-trigger.js";
 
 /**
  * Register all commands with the given registry.
@@ -17,7 +19,12 @@ import { createDiscussionCommands } from "./conversate.js";
  * (safe for multi-session API mode).
  * Add new commands here — this is the single place to browse all available commands.
  */
-export function registerAllCommands(registry: CommandRegistry): void {
+export function registerAllCommands(registry: CommandRegistry, standup: Standup): void {
+  // Standup triggers — /start, done/next, go/skip
+  for (const cmd of createStandupCommands(standup)) {
+    registry.register(cmd);
+  }
+
   // IRC classics (Story 2.5.2)
   registry.register(slapCommand);
   registry.register(meCommand);

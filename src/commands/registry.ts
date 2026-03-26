@@ -47,7 +47,10 @@ export class CommandRegistry {
     ctx: Omit<CommandContext, "message" | "respond">,
     standupActive: boolean,
   ): Promise<boolean> {
-    const lower = text.toLowerCase().trim();
+    // Normalise "!" prefix to "/" so users can type either
+    // (Teams intercepts "/" as its own command palette)
+    const normalised = text.replace(/^!/, "/");
+    const lower = normalised.toLowerCase().trim();
 
     for (const cmd of this.commands) {
       if (!cmd.match(lower, ctx.lang)) continue;
@@ -64,7 +67,7 @@ export class CommandRegistry {
         : (msg: string) => sendChatMessage(ctx.page, msg);
 
       try {
-        await cmd.handle({ ...ctx, message: text, respond });
+        await cmd.handle({ ...ctx, message: normalised, respond });
       } catch (err) {
         console.error(`[Command] Error in ${cmd.name}:`, err);
       }

@@ -6,7 +6,7 @@ import { ChatMonitor, sendAndSpeak, sendChatMessage } from "./chat.js";
 import { Standup } from "./standup.js";
 import { installVirtualCamera, enableCamera } from "../browser/virtual-camera.js";
 import { config } from "../config.js";
-import { type Language, getMessages, startTriggers, advanceTriggers, pickWelcome } from "../i18n/messages.js";
+import { type Language, getMessages, pickWelcome } from "../i18n/messages.js";
 import { CommandRegistry } from "../commands/registry.js";
 import { registerAllCommands } from "../commands/index.js";
 
@@ -136,8 +136,6 @@ export class SessionManager {
   private async runSession(session: ActiveSession): Promise<void> {
     const { id, page, meetingUrl, botName, language, chatMonitor, standup } = session;
     const msg = getMessages(language);
-    const starts = startTriggers[language];
-    const advances = advanceTriggers[language];
 
     // Install virtual camera before navigation
     const hasAvatar = !!(config.avatarVideoPath || config.avatarImagePath);
@@ -166,38 +164,14 @@ export class SessionManager {
     session.status = "idle";
 
     const commands = new CommandRegistry();
-    registerAllCommands(commands);
+    registerAllCommands(commands, standup);
 
     chatMonitor.onMessage(async (chatMsg) => {
-      const lower = chatMsg.text.toLowerCase().replace(/\s+/g, " ").trim();
-
-      // Try commands first
-      const handled = await commands.tryHandle(chatMsg.text, {
+      await commands.tryHandle(chatMsg.text, {
         sender: chatMsg.sender,
         page,
         lang: language,
       }, standup.isRunning);
-      if (handled) return;
-
-      if (starts.some((t) => lower.includes(t))) {
-        if (standup.isRunning) {
-          console.log(`[Session ${id}] Standup already running — ignoring.`);
-          return;
-        }
-        console.log(`[Session ${id}] Standup triggered by ${chatMsg.sender}`);
-        session.status = "standup-active";
-        await standup.run();
-        session.status = "idle";
-      }
-
-      if (standup.isRunning) {
-        if (lower === "go" || lower === "skip") {
-          standup.skipBoard();
-        }
-        if (advances.some((t) => lower.includes(t))) {
-          standup.advance();
-        }
-      }
     });
 
     chatMonitor.start();
