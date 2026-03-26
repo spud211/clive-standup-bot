@@ -10,6 +10,7 @@ import {
   flipCommand,
   helpCommand,
 } from "./fun.js";
+import { conversateCommand, endCommand, extendCommand } from "./conversate.js";
 
 /**
  * Register all commands with the given registry.
@@ -32,4 +33,9 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(eightBallCommand);
   registry.register(flipCommand);
   registry.register(helpCommand);
+
+  // Conversate mode (Story 2.5.5)
+  registry.register(conversateCommand);
+  registry.register(endCommand);
+  registry.register(extendCommand);
 }
