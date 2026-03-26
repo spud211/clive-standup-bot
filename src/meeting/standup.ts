@@ -5,8 +5,6 @@ import { orderParticipants } from "./ordering.js";
 import { type Language, getMessages, fmt, pickComplete } from "../i18n/messages.js";
 import { config } from "../config.js";
 
-const BOARD_PROMPT_TIMEOUT_MS = 10_000;
-
 /**
  * Orchestrates a single standup round.
  *
@@ -86,7 +84,7 @@ export class Standup {
           : fmt(msg.boardPrompt, lastSpeaker);
         await sendAndSpeak(this.page, boardMsg, this.lang);
         console.log("[Standup] Waiting for board share or 'go'/'skip'...");
-        await this.waitForBoardSkip(BOARD_PROMPT_TIMEOUT_MS);
+        await this.waitForBoardSkip();
       }
 
       // Story 1.5: Prompt each participant
@@ -122,17 +120,10 @@ export class Standup {
     });
   }
 
-  /** Wait for board skip signal or timeout, whichever comes first. */
-  private waitForBoardSkip(timeoutMs: number): Promise<void> {
+  /** Wait for board skip signal ("go" / "skip"). No timeout — waits indefinitely. */
+  private waitForBoardSkip(): Promise<void> {
     return new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        this.boardSkipResolve = null;
-        console.log("[Standup] Board prompt timed out — continuing.");
-        resolve();
-      }, timeoutMs);
-
       this.boardSkipResolve = () => {
-        clearTimeout(timer);
         console.log("[Standup] Board prompt skipped.");
         resolve();
       };

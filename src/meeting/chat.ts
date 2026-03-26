@@ -190,7 +190,8 @@ export async function sendAndSpeak(page: Page, message: string, lang?: Language)
   if (!config.ttsEnabled) return;
 
   // Fire-and-forget — don't await
-  const plainText = message.replace(/\*\*/g, "");
+  // Strip markdown bold and emojis so TTS doesn't try to read them
+  const plainText = message.replace(/\*\*/g, "").replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "").trim();
   playAudioInMeeting(plainText, lang)
     .catch((err: unknown) => console.error("[Chat] TTS failed (chat was still sent):", err));
 }
