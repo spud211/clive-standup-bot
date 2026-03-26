@@ -1,5 +1,4 @@
 import { type CommandDef, type CommandContext } from "./registry.js";
-import { sendAndSpeak } from "../meeting/chat.js";
 import { type Language } from "../i18n/messages.js";
 
 function pick<T>(arr: T[]): T {
@@ -41,6 +40,7 @@ const slapSelfResponses: Record<Language, ((sender: string) => string)[]> = {
 export const slapCommand: CommandDef = {
   name: "/slap",
   allowDuringStandup: false,
+  speakResponse: false,
   match: (text) => text.startsWith("/slap "),
   async handle(ctx: CommandContext) {
     const target = ctx.message.replace(/^\/slap\s+/i, "").trim();
@@ -51,7 +51,7 @@ export const slapCommand: CommandDef = {
       ? pick(slapSelfResponses[ctx.lang])(ctx.sender)
       : pick(slapVariants[ctx.lang])(ctx.sender, target);
 
-    await sendAndSpeak(ctx.page, response, ctx.lang);
+    await ctx.respond(response);
   },
 };
 
@@ -62,10 +62,11 @@ export const slapCommand: CommandDef = {
 export const meCommand: CommandDef = {
   name: "/me",
   allowDuringStandup: true,
+  speakResponse: false,
   match: (text) => text.startsWith("/me "),
   async handle(ctx: CommandContext) {
     const action = ctx.message.replace(/^\/me\s+/i, "").trim();
     if (!action) return;
-    await sendAndSpeak(ctx.page, `✨ ${ctx.sender} ${action}`, ctx.lang);
+    await ctx.respond(`✨ ${ctx.sender} ${action}`);
   },
 };

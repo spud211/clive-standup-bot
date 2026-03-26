@@ -1,5 +1,6 @@
 import { type Page } from "playwright";
 import { type Language } from "../i18n/messages.js";
+import { sendChatMessage, sendAndSpeak } from "../meeting/chat.js";
 
 /** Context passed to every command handler. */
 export interface CommandContext {
@@ -8,6 +9,8 @@ export interface CommandContext {
   participants: string[];
   page: Page;
   lang: Language;
+  /** Send a response — routed to chat-only or chat+TTS based on speakResponse flag. */
+  respond: (text: string) => Promise<void>;
 }
 
 /** A registered command definition. */
@@ -16,10 +19,12 @@ export interface CommandDef {
   name: string;
   /** Return true if this command matches the message. */
   match: (text: string, lang: Language) => boolean;
-  /** Handle the command. Use sendAndSpeak from chat.ts for output. */
+  /** Handle the command. Use ctx.respond() for output. */
   handle: (ctx: CommandContext) => Promise<void>;
   /** If true, the command fires even during an active standup. */
   allowDuringStandup: boolean;
+  /** If true, responses are spoken via TTS. Most commands should be false (chat-only). */
+  speakResponse: boolean;
 }
 
 /**
@@ -40,7 +45,7 @@ export class CommandRegistry {
    */
   async tryHandle(
     text: string,
-    ctx: Omit<CommandContext, "message">,
+    ctx: Omit<CommandContext, "message" | "respond">,
     standupActive: boolean,
   ): Promise<boolean> {
     const lower = text.toLowerCase().trim();
@@ -54,8 +59,13 @@ export class CommandRegistry {
       }
 
       console.log(`[Command] ${cmd.name} triggered by ${ctx.sender}`);
+
+      const respond = cmd.speakResponse
+        ? (msg: string) => sendAndSpeak(ctx.page, msg, ctx.lang)
+        : (msg: string) => sendChatMessage(ctx.page, msg);
+
       try {
-        await cmd.handle({ ...ctx, message: text });
+        await cmd.handle({ ...ctx, message: text, respond });
       } catch (err) {
         console.error(`[Command] Error in ${cmd.name}:`, err);
       }

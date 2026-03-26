@@ -23,13 +23,14 @@ const activeTimers: ActiveTimer[] = [];
 export const timerCommand: CommandDef = {
   name: "/timer",
   allowDuringStandup: true,
+  speakResponse: false,
   match: (text) => text.startsWith("/timer"),
   async handle(ctx: CommandContext) {
     const args = ctx.message.replace(/^\/timer\s*/i, "").trim();
 
     if (args.toLowerCase() === "cancel") {
       if (activeTimers.length === 0) {
-        await sendChatMessage(ctx.page, "⏱️ No active timers to cancel.");
+        await ctx.respond("⏱️ No active timers to cancel.");
         return;
       }
       const count = activeTimers.length;
@@ -38,13 +39,13 @@ export const timerCommand: CommandDef = {
         if (t.warningTimeout) clearTimeout(t.warningTimeout);
       }
       activeTimers.length = 0;
-      await sendAndSpeak(ctx.page, `⏱️ Cancelled ${count} timer(s).`, ctx.lang);
+      await ctx.respond(`⏱️ Cancelled ${count} timer(s).`);
       return;
     }
 
     const match = args.match(/^(\d+)\s*(.*)?$/);
     if (!match) {
-      await sendChatMessage(ctx.page, "⏱️ Usage: /timer {minutes} {label}");
+      await ctx.respond("⏱️ Usage: /timer {minutes} {label}");
       return;
     }
 
@@ -52,15 +53,16 @@ export const timerCommand: CommandDef = {
     const label = match[2]?.trim() || "timer";
 
     if (minutes < 1 || minutes > 120) {
-      await sendChatMessage(ctx.page, "⏱️ Timer must be between 1 and 120 minutes.");
+      await ctx.respond("⏱️ Timer must be between 1 and 120 minutes.");
       return;
     }
 
-    await sendAndSpeak(ctx.page, `⏱️ Timer set: ${minutes} minute${minutes > 1 ? "s" : ""} — ${label}`, ctx.lang);
+    await ctx.respond(`⏱️ Timer set: ${minutes} minute${minutes > 1 ? "s" : ""} — ${label}`);
 
     const timer: ActiveTimer = {
       label,
       timeout: setTimeout(async () => {
+        // Timer expiry is spoken aloud to get attention
         await sendAndSpeak(ctx.page, `⏱️ Time's up! ${label} is over.`, ctx.lang);
         const idx = activeTimers.indexOf(timer);
         if (idx >= 0) activeTimers.splice(idx, 1);
@@ -71,7 +73,7 @@ export const timerCommand: CommandDef = {
     // Warning at 2 minutes remaining if timer is > 3 minutes
     if (minutes > 3) {
       timer.warningTimeout = setTimeout(async () => {
-        await sendAndSpeak(ctx.page, `⏱️ 2 minutes left on ${label}.`, ctx.lang);
+        await sendChatMessage(ctx.page, `⏱️ 2 minutes left on ${label}.`);
       }, (minutes - 2) * 60_000);
     }
 
@@ -95,25 +97,26 @@ let activePoll: ActivePoll | null = null;
 export const pollCommand: CommandDef = {
   name: "/poll",
   allowDuringStandup: false,
+  speakResponse: false,
   match: (text) => text.startsWith("/poll"),
   async handle(ctx: CommandContext) {
     const args = ctx.message.replace(/^\/poll\s*/i, "").trim().toLowerCase();
 
     if (args === "results") {
       if (!activePoll) {
-        await sendChatMessage(ctx.page, "📊 No active poll.");
+        await ctx.respond("📊 No active poll.");
         return;
       }
-      await sendChatMessage(ctx.page, formatPollResults(activePoll, false));
+      await ctx.respond(formatPollResults(activePoll, false));
       return;
     }
 
     if (args === "close") {
       if (!activePoll) {
-        await sendChatMessage(ctx.page, "📊 No active poll to close.");
+        await ctx.respond("📊 No active poll to close.");
         return;
       }
-      await sendAndSpeak(ctx.page, formatPollResults(activePoll, true), ctx.lang);
+      await ctx.respond(formatPollResults(activePoll, true));
       activePoll = null;
       return;
     }
@@ -122,7 +125,7 @@ export const pollCommand: CommandDef = {
     const rawArgs = ctx.message.replace(/^\/poll\s*/i, "").trim();
     const parts = rawArgs.split("|").map((p) => p.trim()).filter(Boolean);
     if (parts.length < 3) {
-      await sendChatMessage(ctx.page, "📊 Usage: /poll Question | Option1 | Option2 | ...");
+      await ctx.respond("📊 Usage: /poll Question | Option1 | Option2 | ...");
       return;
     }
 
@@ -130,7 +133,7 @@ export const pollCommand: CommandDef = {
     const options = parts.slice(1);
 
     if (options.length > 10) {
-      await sendChatMessage(ctx.page, "📊 Maximum 10 options per poll.");
+      await ctx.respond("📊 Maximum 10 options per poll.");
       return;
     }
 
@@ -142,7 +145,7 @@ export const pollCommand: CommandDef = {
     });
     lines.push("Reply with the number to vote!");
 
-    await sendAndSpeak(ctx.page, lines.join("\n"), ctx.lang);
+    await ctx.respond(lines.join("\n"));
     console.log(`[Poll] Started: "${question}" with ${options.length} options.`);
   },
 };
@@ -151,6 +154,7 @@ export const pollCommand: CommandDef = {
 export const pollVoteCommand: CommandDef = {
   name: "poll-vote",
   allowDuringStandup: false,
+  speakResponse: false,
   match: (text) => {
     if (!activePoll) return false;
     const num = parseInt(text.trim(), 10);
@@ -166,7 +170,7 @@ export const pollVoteCommand: CommandDef = {
     } else {
       console.log(`[Poll] ${ctx.sender} voted ${num}`);
     }
-    await sendChatMessage(ctx.page, `📊 ${ctx.sender} voted for ${activePoll.options[num - 1]}.`);
+    await ctx.respond(`📊 ${ctx.sender} voted for ${activePoll.options[num - 1]}.`);
   },
 };
 
@@ -216,9 +220,10 @@ const quotes = [
 export const quoteCommand: CommandDef = {
   name: "/quote",
   allowDuringStandup: false,
+  speakResponse: false,
   match: (text) => text === "/quote",
   async handle(ctx: CommandContext) {
-    await sendAndSpeak(ctx.page, `💬 ${pick(quotes)}`, ctx.lang);
+    await ctx.respond(`💬 ${pick(quotes)}`);
   },
 };
 
@@ -252,9 +257,10 @@ const eightBallResponses = [
 export const eightBallCommand: CommandDef = {
   name: "/8ball",
   allowDuringStandup: false,
+  speakResponse: false,
   match: (text) => text.startsWith("/8ball"),
   async handle(ctx: CommandContext) {
-    await sendAndSpeak(ctx.page, `🎱 ${pick(eightBallResponses)}`, ctx.lang);
+    await ctx.respond(`🎱 ${pick(eightBallResponses)}`);
   },
 };
 
@@ -265,10 +271,11 @@ export const eightBallCommand: CommandDef = {
 export const flipCommand: CommandDef = {
   name: "/flip",
   allowDuringStandup: true,
+  speakResponse: false,
   match: (text) => text === "/flip",
   async handle(ctx: CommandContext) {
     const result = Math.random() < 0.5 ? "Heads" : "Tails";
-    await sendAndSpeak(ctx.page, `🪙 ${result}!`, ctx.lang);
+    await ctx.respond(`🪙 ${result}!`);
   },
 };
 
@@ -312,8 +319,9 @@ const helpText: Record<Language, string> = {
 export const helpCommand: CommandDef = {
   name: "/help",
   allowDuringStandup: true,
+  speakResponse: false,
   match: (text) => text === "/help",
   async handle(ctx: CommandContext) {
-    await sendChatMessage(ctx.page, helpText[ctx.lang]);
+    await ctx.respond(helpText[ctx.lang]);
   },
 };

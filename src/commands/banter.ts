@@ -1,5 +1,4 @@
 import { type CommandDef, type CommandContext } from "./registry.js";
-import { sendAndSpeak } from "../meeting/chat.js";
 import { type Language } from "../i18n/messages.js";
 
 function pick<T>(arr: T[]): T {
@@ -33,9 +32,10 @@ const greetingResponses: Record<Language, string[]> = {
 export const greetingCommand: CommandDef = {
   name: "greeting",
   allowDuringStandup: true,
+  speakResponse: true,
   match: (text) => greetingPatterns.some((p) => p.test(text)),
   async handle(ctx: CommandContext) {
-    await sendAndSpeak(ctx.page, pick(greetingResponses[ctx.lang]), ctx.lang);
+    await ctx.respond(pick(greetingResponses[ctx.lang]));
   },
 };
 
@@ -67,8 +67,9 @@ const thanksResponses: Record<Language, string[]> = {
 export const thanksCommand: CommandDef = {
   name: "thanks",
   allowDuringStandup: true,
+  speakResponse: false,
   match: (text) => thanksPatterns.some((p) => p.test(text)),
   async handle(ctx: CommandContext) {
-    await sendAndSpeak(ctx.page, pick(thanksResponses[ctx.lang]), ctx.lang);
+    await ctx.respond(pick(thanksResponses[ctx.lang]));
   },
 };

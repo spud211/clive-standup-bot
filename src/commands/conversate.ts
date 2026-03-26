@@ -12,7 +12,7 @@ interface DiscussionState {
 
 let activeDiscussion: DiscussionState | null = null;
 
-// Store a reference to the page so /end and /extend can send messages
+// Store a reference to the page so timer callbacks can send messages
 let discussionPage: CommandContext["page"] | null = null;
 let discussionLang: Language = "en";
 
@@ -64,15 +64,14 @@ function setupTimers(durationMs: number): void {
   // Warning at 2 minutes remaining (only if duration > 3 min)
   if (durationMs > 3 * 60_000) {
     activeDiscussion.warningTimer = setTimeout(async () => {
-      await sendAndSpeak(page, m.warning, lang);
+      await sendChatMessage(page, m.warning);
     }, durationMs - 2 * 60_000);
   }
 
-  // Time's up
+  // Time's up — spoken aloud to get attention
   activeDiscussion.timer = setTimeout(async () => {
     await sendAndSpeak(page, m.timeUp(topic), lang);
     console.log(`[Conversate] Time's up on "${topic}".`);
-    // Don't clear — let the user /end or /extend
   }, durationMs);
 }
 
@@ -83,12 +82,13 @@ function setupTimers(durationMs: number): void {
 export const conversateCommand: CommandDef = {
   name: "/conversate",
   allowDuringStandup: false,
+  speakResponse: true,
   match: (text) => text.startsWith("/conversate ") || text.startsWith("/discuss "),
   async handle(ctx: CommandContext) {
     const m = msgs[ctx.lang];
 
     if (activeDiscussion) {
-      await sendChatMessage(ctx.page, m.alreadyActive(activeDiscussion.topic));
+      await ctx.respond(m.alreadyActive(activeDiscussion.topic));
       return;
     }
 
@@ -110,7 +110,7 @@ export const conversateCommand: CommandDef = {
 
     setupTimers(durationMs);
 
-    await sendAndSpeak(ctx.page, m.start(topic), ctx.lang);
+    await ctx.respond(m.start(topic));
     console.log(`[Conversate] Started: "${topic}" (10 minutes).`);
   },
 };
@@ -122,18 +122,19 @@ export const conversateCommand: CommandDef = {
 export const endCommand: CommandDef = {
   name: "/end",
   allowDuringStandup: false,
+  speakResponse: true,
   match: (text) => text === "/end",
   async handle(ctx: CommandContext) {
     const m = msgs[ctx.lang];
 
     if (!activeDiscussion) {
-      await sendChatMessage(ctx.page, m.noDiscussion);
+      await ctx.respond(m.noDiscussion);
       return;
     }
 
     console.log(`[Conversate] Discussion on "${activeDiscussion.topic}" closed.`);
     clearDiscussion();
-    await sendAndSpeak(ctx.page, m.closed, ctx.lang);
+    await ctx.respond(m.closed);
   },
 };
 
@@ -144,12 +145,13 @@ export const endCommand: CommandDef = {
 export const extendCommand: CommandDef = {
   name: "/extend",
   allowDuringStandup: false,
+  speakResponse: false,
   match: (text) => text.startsWith("/extend"),
   async handle(ctx: CommandContext) {
     const m = msgs[ctx.lang];
 
     if (!activeDiscussion) {
-      await sendChatMessage(ctx.page, m.noDiscussion);
+      await ctx.respond(m.noDiscussion);
       return;
     }
 
@@ -165,7 +167,7 @@ export const extendCommand: CommandDef = {
     activeDiscussion.startedAt = Date.now();
     setupTimers(newDurationMs);
 
-    await sendAndSpeak(ctx.page, m.extended(minutes, activeDiscussion.topic), ctx.lang);
+    await ctx.respond(m.extended(minutes, activeDiscussion.topic));
     console.log(`[Conversate] Extended by ${minutes} minutes.`);
   },
 };
