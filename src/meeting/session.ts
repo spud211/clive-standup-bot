@@ -192,6 +192,9 @@ export class SessionManager {
       }
 
       if (standup.isRunning) {
+        if (lower === "go" || lower === "skip") {
+          standup.skipBoard();
+        }
         if (advances.some((t) => lower.includes(t))) {
           standup.advance();
         }

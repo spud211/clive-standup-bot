@@ -11,6 +11,8 @@ export interface Messages {
   complete: string[];
   completeFriday: string;
   ops: string;
+  boardPrompt: string;
+  boardPromptWithUrl: string;
 }
 
 const en: Messages = {
@@ -34,6 +36,8 @@ const en: Messages = {
   ],
   completeFriday: "That's a wrap! Enjoy the weekend, you've earned it. 👋",
   ops: "⚡ Mode +o {name} — you have the conn today, {firstName}. Keep us honest.",
+  boardPrompt: "🖥️ **{name}**, fancy sharing the board? I'll wait 10 seconds, or type **go** to skip.",
+  boardPromptWithUrl: "🖥️ **{name}**, fancy sharing the board? ({url}) I'll wait 10 seconds, or type **go** to skip.",
 };
 
 const fr: Messages = {
@@ -56,6 +60,8 @@ const fr: Messages = {
   ],
   completeFriday: "C'est fini ! Bon weekend, vous l'avez mérité. 👋",
   ops: "⚡ Mode +o {name} — c'est toi le chef aujourd'hui, {firstName}. Garde-nous sur les rails.",
+  boardPrompt: "🖥️ **{name}**, tu veux partager le board ? J'attends 10 secondes, ou tape **go** pour passer.",
+  boardPromptWithUrl: "🖥️ **{name}**, tu veux partager le board ? ({url}) J'attends 10 secondes, ou tape **go** pour passer.",
 };
 
 const allMessages: Record<Language, Messages> = { en, fr };
@@ -101,8 +107,14 @@ export function pickComplete(msg: Messages): string {
   return pick(msg.complete);
 }
 
-/** Format a message template, replacing {name} and {firstName} with the given value. */
-export function fmt(template: string, name: string): string {
+/** Format a message template, replacing {name}, {firstName}, and {url} placeholders. */
+export function fmt(template: string, name: string, extra?: Record<string, string>): string {
   const firstName = name.split(/\s+/)[0];
-  return template.replace(/\{name\}/g, name).replace(/\{firstName\}/g, firstName);
+  let result = template.replace(/\{name\}/g, name).replace(/\{firstName\}/g, firstName);
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+    }
+  }
+  return result;
 }

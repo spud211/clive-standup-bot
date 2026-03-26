@@ -20,4 +20,6 @@ export const config = {
   avatarImagePath: process.env.AVATAR_IMAGE_PATH ?? "",
   avatarVideoPath: process.env.AVATAR_VIDEO_PATH ?? "",
   audioDevice: process.env.AUDIO_DEVICE ?? "BlackHole 2ch",
+  scrumBoardPrompt: process.env.SCRUM_BOARD_PROMPT !== "false",
+  scrumBoardUrl: process.env.SCRUM_BOARD_URL ?? "",
 };

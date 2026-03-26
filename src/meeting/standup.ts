@@ -3,6 +3,7 @@ import { sendAndSpeak } from "./chat.js";
 import { getParticipants } from "./participants.js";
 import { orderParticipants } from "./ordering.js";
 import { type Language, getMessages, fmt, pickComplete } from "../i18n/messages.js";
+import { config } from "../config.js";
 
 /**
  * Orchestrates a single standup round.
@@ -21,6 +22,7 @@ export class Standup {
 
   private _running = false;
   private advanceResolve: (() => void) | null = null;
+  private boardSkipResolve: (() => void) | null = null;
 
   constructor(page: Page, botName: string, lastSpeakerPattern: string, lang: Language = "en") {
     this.page = page;
@@ -38,6 +40,14 @@ export class Standup {
     if (this.advanceResolve) {
       this.advanceResolve();
       this.advanceResolve = null;
+    }
+  }
+
+  /** Signal to skip the board prompt wait. */
+  skipBoard(): void {
+    if (this.boardSkipResolve) {
+      this.boardSkipResolve();
+      this.boardSkipResolve = null;
     }
   }
 
@@ -67,6 +77,16 @@ export class Standup {
         await sendAndSpeak(this.page, fmt(msg.ops, lastSpeaker), this.lang);
       }
 
+      // Story 2.6.1: Scrum board prompt
+      if (config.scrumBoardPrompt && lastSpeaker) {
+        const boardMsg = config.scrumBoardUrl
+          ? fmt(msg.boardPromptWithUrl, lastSpeaker, { url: config.scrumBoardUrl })
+          : fmt(msg.boardPrompt, lastSpeaker);
+        await sendAndSpeak(this.page, boardMsg, this.lang);
+        console.log("[Standup] Waiting for board share (10s or 'go'/'skip')...");
+        await this.waitForBoardSkip(10_000);
+      }
+
       // Story 1.5: Prompt each participant
       for (const name of ordered) {
         await sendAndSpeak(this.page, fmt(msg.prompt, name), this.lang);
@@ -93,6 +113,23 @@ export class Standup {
   private waitForAdvance(): Promise<void> {
     return new Promise<void>((resolve) => {
       this.advanceResolve = resolve;
+    });
+  }
+
+  /** Wait for board skip signal or timeout, whichever comes first. */
+  private waitForBoardSkip(timeoutMs: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.boardSkipResolve = null;
+        console.log("[Standup] Board prompt timed out — continuing.");
+        resolve();
+      }, timeoutMs);
+
+      this.boardSkipResolve = () => {
+        clearTimeout(timer);
+        console.log("[Standup] Board prompt skipped.");
+        resolve();
+      };
     });
   }
 }
