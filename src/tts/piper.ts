@@ -35,6 +35,9 @@ export class PiperTtsProvider implements TtsProvider {
       const proc = spawn(piperBin, [
         "--model", voice,
         "--output_file", tmpPath,
+        "--length-scale", String(config.piperLengthScale),
+        "--noise-scale", String(config.piperNoiseScale),
+        "--noise-w-scale", String(config.piperNoiseWScale),
       ], { stdio: ["pipe", "pipe", "pipe"], timeout: 30_000 });
 
       let stderr = "";
