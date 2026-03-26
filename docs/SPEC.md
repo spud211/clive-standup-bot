@@ -2,14 +2,15 @@
 
 ## Overview
 
-Clive is a bot that joins Microsoft Teams meetings as a guest participant and facilitates daily standup meetings. It joins via the Teams web client in an automated browser (Playwright), interacts through meeting chat, and eventually speaks using TTS.
+Clive is a bot that joins Microsoft Teams meetings as a guest participant and facilitates daily standup meetings. It joins via the Teams web client in an automated browser (Playwright), interacts through meeting chat, and speaks using TTS. Clive has personality — IRC-style commands, banter, and fun utilities.
 
 ## Architecture
 
 - **Runtime:** Node.js + TypeScript
 - **Browser Automation:** Playwright (Chromium)
-- **Audio (Phase 2):** PulseAudio virtual sink + TTS engine
-- **Deployment:** Docker container on Linux server
+- **Audio:** macOS `say` command → BlackHole 2ch virtual audio device → browser mic input
+- **Virtual Camera:** getUserMedia override with canvas stream (static image or looping video)
+- **Deployment:** Docker container on Linux server (future), macOS for dev
 - **Local Dev:** Runs on macOS, Playwright in headed mode for visual debugging
 
 ## Phases
@@ -35,7 +36,7 @@ Clive is a bot that joins Microsoft Teams meetings as a guest participant and fa
 
 **Technical Notes:**
 - Teams web join flow may include: landing page → "Continue on this browser" → pre-join screen (name entry, mic/camera toggle) → lobby → meeting
-- Mic and camera should be OFF on join
+- Mic and camera should be OFF on join (unless avatar is configured)
 - Must handle the lobby wait (host may need to admit)
 - Selectors will be fragile — use `data-tid` attributes where possible, fall back to aria labels and text content
 - May need to dismiss cookie banners, "use the app" prompts, etc.
@@ -47,35 +48,34 @@ Clive is a bot that joins Microsoft Teams meetings as a guest participant and fa
 **Goal:** Run a full standup via meeting chat.
 
 **Scope:**
-- On join, send chat message: "Good morning team! Type **start daily** when you're ready."
-- Monitor chat for the message "start daily" (case-insensitive) from any participant
+- On join, send chat message (randomly selected from pool): "Good morning team! Type **start daily** when you're ready."
+- Monitor chat for trigger phrases (language-aware, case-insensitive)
 - On trigger:
-  1. Read the current participant list from the meeting
-  2. Remove "Clive: Standup AI" (self) from the list
-  3. Randomise the order, BUT always place any participant whose name contains "Kinder" (case-insensitive) last
-  4. For each participant in order:
+  1. Read the current participant list from the meeting roster
+  2. Remove bot (self) from the list
+  3. Randomise the order, BUT always place any participant matching `LAST_SPEAKER_NAME` last
+  4. Post ops ceremony: "⚡ Mode +o {name} — you have the conn today"
+  5. Optionally prompt lead to share scrum board (10s skippable wait)
+  6. For each participant in order:
      - Send chat message: "**{Name}**, you're up! Give us your update."
-     - Wait for that participant (or anyone) to type "done" or "next" (case-insensitive) in chat
+     - Wait for "done"/"next" (case-insensitive) in chat
      - Send chat message: "Thanks {Name}! ✓"
-  5. After all participants have spoken:
-     - Send chat message: "That's everyone! Thanks team, have a great day. 👋"
+  7. After all participants: randomly selected sign-off message
+- All bot messages also spoken via TTS (fire-and-forget, non-blocking)
+- Supports English and French (configurable per-session)
 - Remain in call until manually terminated or kicked
 
 **Participant Detection:**
-- Read from the Teams meeting participant panel/roster
-- Use display names as shown in Teams
-- Re-read participant list at the moment "start daily" is triggered (not at join time), so latecomers are included
+- Read from the Teams meeting roster panel (`#roster-button` to open)
+- Use `[role="treeitem"] span[dir="auto"]` for clean display names
+- Filter out section headers and the bot itself
+- Re-read participant list at trigger time (not at join time)
 
 **Edge Cases (POC scope):**
-- If someone leaves mid-standup, skip them when their turn comes (check participant list again)
+- If someone leaves mid-standup, skip them
 - No timeout — wait indefinitely for "done"/"next"
 - If "start daily" is sent again during a standup, ignore it
 - Bot does not give itself an update turn
-
-**Chat Monitoring:**
-- Poll or observe the chat panel in the browser DOM
-- Track which messages are new (by index/count) to avoid re-processing old messages
-- Chat input: type into the chat compose box and send
 
 ---
 
@@ -87,13 +87,13 @@ Clive is a bot that joins Microsoft Teams meetings as a guest participant and fa
 - Lightweight HTTP server (Fastify) running alongside the bot logic
 - Each "join" request spawns a new browser context (isolated session)
 - Multiple meetings can run concurrently
-- Server runs on a configurable port (default 3002, since 3000/3001 are taken)
+- Server runs on a configurable port (default 3002)
 
 **Endpoints:**
 
 | Method | Path | Body | Description |
 |---|---|---|---|
-| `POST` | `/sessions` | `{ meetingUrl, botName?, lastSpeaker? }` | Join a meeting. Returns `{ sessionId, status }` |
+| `POST` | `/sessions` | `{ meetingUrl, botName?, lastSpeaker?, language? }` | Join a meeting. Returns `{ sessionId, status }` |
 | `GET` | `/sessions` | — | List all active sessions with status |
 | `GET` | `/sessions/:id` | — | Get status of a specific session |
 | `DELETE` | `/sessions/:id` | — | Leave meeting and close browser for session |
@@ -104,47 +104,47 @@ Clive is a bot that joins Microsoft Teams meetings as a guest participant and fa
 - `DELETE /sessions/:id` → bot leaves meeting, browser closes, session removed
 - If bot is kicked from meeting, session status becomes `disconnected`
 
-**Defaults:**
-- `botName` defaults to `BOT_DISPLAY_NAME` from env (i.e. "Clive: Standup AI")
-- `lastSpeaker` defaults to `LAST_SPEAKER_NAME` from env (i.e. "Kinder")
-- These can be overridden per-session via the POST body
+---
 
-**Configuration:**
+### Phase 2 — Text-to-Speech & Virtual Camera
 
-| Variable | Description | Example |
-|---|---|---|
-| `API_PORT` | Port for the REST API | `3002` |
-| `API_HOST` | Bind address | `0.0.0.0` |
+**Goal:** Clive speaks its prompts aloud and shows a video avatar.
 
-**Deliverables:**
-- Working REST API
-- `POWERSHELL.md` — a reference doc with PowerShell snippets for all endpoints (Invoke-RestMethod examples)
-- Console logging for all API requests and session state changes
+**Scope:**
+- All chat messages are ALSO spoken aloud via TTS (fire-and-forget, non-blocking)
+- Audio routed via BlackHole 2ch virtual audio device (macOS)
+- `say -a "BlackHole 2ch"` speaks directly to the virtual device
+- Browser picks up BlackHole as mic input (set as system default via SwitchAudioSource)
+- Virtual camera via getUserMedia override: static image (5fps) or looping video (30fps)
+- TTS serialised via promise queue to prevent overlapping speech
+- Language-aware voice selection (English/French)
+- Mic stays unmuted throughout — no mute/unmute cycling
 
 ---
 
-### Phase 2 — Text-to-Speech (Bot Speaks)
+### Phase 2.5 — Clive's Personality (IRC Bot Mode & Fun)
 
-**Goal:** Clive speaks its prompts aloud in the meeting, in addition to chat messages.
+**Goal:** Give Clive personality through commands, banter, and utilities.
 
 **Scope:**
-- All chat messages from Phase 1 are ALSO spoken aloud via TTS
-- Audio is routed into the meeting via a virtual microphone
-- Chat messages remain as a fallback/log
+- Pluggable `CommandRegistry` with pattern matching and `allowDuringStandup`/`speakResponse` flags
+- IRC classics: `/slap`, `/me`, ops ceremony on standup start
+- Banter: responds to greetings and thanks directed at Clive
+- Fun commands: `/timer`, `/poll`, `/quote`, `/8ball`, `/flip`, `/help`
+- Conversate mode: `/conversate {topic}` for timed open discussions
+- Dynamic welcome/sign-off messages with day-of-week specials
 
-**Technical Approach:**
-- PulseAudio virtual sink inside Docker container (or on macOS for dev)
-- TTS engine options (to evaluate):
-  - **Local:** piper, espeak-ng, say (macOS only)
-  - **Cloud:** Azure TTS, Google TTS, ElevenLabs
-  - **Pre-recorded audio files** as a simpler alternative for fixed phrases
-- Generate audio → play into virtual sink → Playwright browser picks up virtual sink as microphone input → meeting hears the audio
+---
 
-**Notes:**
-- The bot's mic must be unmuted in Teams before speaking, then re-muted
-- Latency matters — TTS should be fast enough to feel natural
-- For POC, pre-recorded files or a fast local TTS are fine
-- macOS dev may use BlackHole or similar virtual audio device
+### Phase 2.6 — Scrum Board Prompt
+
+**Goal:** Remind the team lead to share their screen with the board.
+
+**Scope:**
+- After ops ceremony, before first speaker, Clive prompts lead to share board
+- 10-second skippable wait (type "go" or "skip")
+- Optional `SCRUM_BOARD_URL` includes a link in the prompt
+- Configurable via `SCRUM_BOARD_PROMPT` (default true)
 
 ---
 
@@ -152,13 +152,7 @@ Clive is a bot that joins Microsoft Teams meetings as a guest participant and fa
 
 **Goal:** Detect "and that's my update" (or similar) via speech recognition to auto-advance.
 
-**Not in scope for current build.** Placeholder for future work.
-
-**Approach would be:**
-- Capture meeting audio from browser
-- Stream to STT engine (Whisper, Deepgram, Azure Speech)
-- Detect trigger phrases
-- Replace the "done"/"next" chat trigger from Phase 1
+**Not in scope for current build.** See STORIES.md for detailed stories (Phase 3A, 3B, 3C).
 
 ---
 
@@ -168,14 +162,23 @@ All config via environment variables or a `.env` file:
 
 | Variable | Description | Example |
 |---|---|---|
-| `TEAMS_MEETING_URL` | Full Teams meeting join URL (direct mode only) | `https://teams.microsoft.com/l/meetup-join/...` |
+| `TEAMS_MEETING_URL` | Full Teams meeting join URL (direct mode only) | `https://teams.microsoft.com/l/...` |
 | `BOT_DISPLAY_NAME` | Default name shown in meeting | `Clive: Standup AI` |
 | `HEADLESS` | Run browser headless (true for prod) | `false` |
 | `LAST_SPEAKER_NAME` | Name pattern to always go last | `Kinder` |
+| `MODE` | `direct` (single meeting via env) or `api` (REST server) | `direct` |
+| `LANGUAGE` | Bot language: `en` or `fr` | `en` |
 | `API_PORT` | Port for REST API (Phase 1.5+) | `3002` |
 | `API_HOST` | Bind address for REST API | `0.0.0.0` |
-| `MODE` | `direct` (single meeting via env) or `api` (REST server) | `direct` |
-| `AVATAR_IMAGE_PATH` | Path to Clive's avatar image (optional — camera off if unset) | `./assets/clive-avatar.png` |
+| `TTS_ENABLED` | Enable/disable TTS | `true` |
+| `TTS_VOICE` | macOS `say` voice for English | `Jamie (Enhanced)` |
+| `TTS_VOICE_FR` | macOS `say` voice for French | `Thomas` |
+| `TTS_RATE` | Speech rate (words per minute) | `` |
+| `AUDIO_DEVICE` | Virtual audio device name | `BlackHole 2ch` |
+| `AVATAR_IMAGE_PATH` | Static avatar image (camera off if unset) | `assets/clive-avatar.png` |
+| `AVATAR_VIDEO_PATH` | Looping video avatar (takes priority over image) | `assets/clive-avatar.mp4` |
+| `SCRUM_BOARD_PROMPT` | Prompt lead to share board | `true` |
+| `SCRUM_BOARD_URL` | Optional URL for board prompt | `` |
 
 ---
 
@@ -190,22 +193,39 @@ clive-standup-bot/
 │   │   ├── server.ts         # Fastify HTTP server
 │   │   └── routes.ts         # Session endpoints
 │   ├── browser/
-│   │   ├── launch.ts         # Playwright browser setup
-│   │   └── teams-join.ts     # Teams meeting join flow
+│   │   ├── launch.ts         # Playwright browser setup + audio device
+│   │   ├── selectors.ts      # Centralised Teams DOM selectors
+│   │   ├── teams-join.ts     # Teams meeting join flow
+│   │   └── virtual-camera.ts # getUserMedia override (image/video)
+│   ├── commands/
+│   │   ├── registry.ts       # CommandRegistry + CommandDef interface
+│   │   ├── index.ts          # Register all commands (single browse point)
+│   │   ├── irc.ts            # /slap, /me
+│   │   ├── banter.ts         # Greetings, thanks responses
+│   │   ├── fun.ts            # /timer, /poll, /quote, /8ball, /flip, /help
+│   │   └── conversate.ts     # /conversate, /end, /extend
+│   ├── i18n/
+│   │   └── messages.ts       # All bot messages (en/fr), triggers, voices
 │   ├── meeting/
 │   │   ├── chat.ts           # Chat send/receive/monitor
-│   │   ├── participants.ts   # Read participant list
+│   │   ├── participants.ts   # Read participant list from roster
+│   │   ├── ordering.ts       # Participant ordering (random, last speaker)
 │   │   ├── session.ts        # Session manager (tracks active sessions)
 │   │   └── standup.ts        # Standup orchestration logic
-│   └── tts/                  # Phase 2
-│       └── speak.ts          # TTS + audio routing
+│   └── tts/
+│       └── audio.ts          # TTS audio playback via BlackHole
+├── assets/
+│   ├── clive-avatar.png      # Static avatar image
+│   └── clive-avatar.mp4      # Looping video avatar (4s, 640x640)
 ├── .env.example
 ├── package.json
 ├── tsconfig.json
-├── Dockerfile                # Phase 2+
-├── SPEC.md                   # This file
-├── STORIES.md                # User stories
-└── POWERSHELL.md             # PowerShell reference for API calls
+├── CLAUDE.md                 # Instructions for Claude Code
+├── CURL.md                   # curl reference for API calls
+├── POWERSHELL.md             # PowerShell reference for API calls
+└── docs/
+    ├── SPEC.md               # This file
+    └── STORIES.md            # User stories
 ```
 
 ---
@@ -213,8 +233,10 @@ clive-standup-bot/
 ## Development Workflow
 
 - **Local dev:** `npm run dev` — launches headed Chromium, joins meeting, visible on screen
+- **API mode:** `npm run api` — starts REST server on port 3002
 - **Debug:** Watch the browser do its thing, check console output for chat monitoring
-- **Test:** Create a Teams meeting with yourself, run the bot, interact via Teams on your phone or another browser
+- **Test:** Create a Teams meeting, run the bot, interact via Teams on phone or another browser
+- **Unit tests:** `npm test` — Vitest for pure logic (ordering, config)
 
 ---
 

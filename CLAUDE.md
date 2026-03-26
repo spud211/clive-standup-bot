@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-This is **Clive: Standup AI** — a bot that joins Microsoft Teams meetings as a guest participant via an automated browser (Playwright) and facilitates daily standup meetings through chat interaction.
+This is **Clive: Standup AI** — a bot that joins Microsoft Teams meetings as a guest participant via an automated browser (Playwright), facilitates daily standup meetings through chat interaction, speaks via TTS, and has IRC-style personality commands.
 
-Read `SPEC.md` for full technical specification and `STORIES.md` for user stories broken into phases.
+Read `docs/SPEC.md` for full technical specification and `docs/STORIES.md` for user stories broken into phases.
 
 ## Tech Stack
 
@@ -12,6 +12,7 @@ Read `SPEC.md` for full technical specification and `STORIES.md` for user storie
 - **Modules:** ESM (`"type": "module"` in package.json)
 - **Browser Automation:** Playwright (Chromium only)
 - **HTTP Server (Phase 1.5):** Fastify
+- **TTS:** macOS `say` command → BlackHole 2ch virtual audio device
 - **Testing:** Vitest for unit tests
 - **Package Manager:** npm
 
@@ -19,8 +20,12 @@ Read `SPEC.md` for full technical specification and `STORIES.md` for user storie
 
 - **One session = one browser context.** Each meeting the bot joins gets its own isolated Playwright browser context.
 - **All Teams DOM selectors live in one centralised file** (`src/browser/selectors.ts`). Never scatter selectors across the codebase. They WILL break when Microsoft updates Teams — keeping them in one place makes maintenance feasible.
+- **All bot messages live in one centralised locale file** (`src/i18n/messages.ts`). Never hardcode user-facing strings. Supports `en` and `fr`.
+- **All commands registered in one file** (`src/commands/index.ts`). Single place to browse all available commands.
 - **Log everything to console.** Every state transition, every chat message detected, every action taken. This is a bot that runs headless in production — logs are our eyes.
 - **Graceful degradation.** If something fails (chat send, participant read, TTS), log the error and continue. Don't crash the whole session.
+- **TTS is fire-and-forget.** Chat messages are sent immediately. TTS plays in the background and never blocks the standup flow. TTS calls are serialised via a promise queue to prevent overlapping speech.
+- **Commands declare behaviour.** Each command has `allowDuringStandup` (blocked during standup if false) and `speakResponse` (chat-only if false, spoken if true). Most fun/utility commands are chat-only.
 
 ## Project Structure
 
@@ -29,9 +34,11 @@ Follow the structure defined in SPEC.md. Key directories:
 ```
 src/
   api/          — Fastify REST server (Phase 1.5)
-  browser/      — Playwright launch + Teams join flow + selectors
+  browser/      — Playwright launch + Teams join flow + selectors + virtual camera
+  commands/     — Pluggable chat command system (IRC, banter, fun, conversate)
+  i18n/         — Locale messages, triggers, voice config (en/fr)
   meeting/      — Chat, participants, session management, standup logic
-  tts/          — Text-to-speech (Phase 2)
+  tts/          — TTS audio playback via BlackHole
 ```
 
 ## Code Style & Conventions
@@ -52,6 +59,13 @@ The Teams web client is the hardest part of this project. Key guidance:
 - **Always wait for elements** before interacting. Use Playwright's `waitForSelector` or `locator.waitFor()` with reasonable timeouts.
 - **Dismiss interruptions.** Cookie banners, "use the app" prompts, notification permission dialogs — handle these early in the join flow.
 - **Chat panel** may need to be explicitly opened. Don't assume it's visible by default.
+- **Key selectors** (see `src/browser/selectors.ts` for full list):
+  - Meeting entry: `#hangup-button`
+  - Chat compose: `[data-tid="ckeditor"][role="textbox"]`
+  - Chat messages: `[data-tid="chat-pane-item"]`
+  - Roster: `#roster-button`, `[role="treeitem"] span[dir="auto"]`
+  - Camera: `#video-button` (aria-label toggles state)
+  - Mic: `#mic-button` (aria-label toggles state)
 
 ## Development Workflow
 
@@ -66,11 +80,16 @@ For local development, Playwright runs in **headed mode** (visible browser windo
 
 Work is organised into phases. **Complete one phase fully before starting the next.** Within a phase, work through stories in numerical order — each builds on the previous.
 
-- **Phase 0:** Join meeting POC (Stories 0.1–0.5)
-- **Phase 1:** Chat-based standup flow (Stories 1.1–1.6)
-- **Phase 1.5:** REST API for multi-meeting control (Stories 1.5.1–1.5.4)
-- **Phase 2:** Text-to-speech (Stories 2.1–2.3)
-- **Phase 3:** Speech recognition (future, not yet specced)
+- **Phase 0:** Join meeting POC (Stories 0.1–0.5) ✅
+- **Phase 1:** Chat-based standup flow (Stories 1.1–1.7) ✅
+- **Phase 1.5:** REST API for multi-meeting control (Stories 1.5.1–1.5.4) ✅
+- **Phase 2:** TTS + virtual camera (Stories 2.1–2.6) ✅
+- **Phase 2.5:** Personality & commands (Stories 2.5.1–2.5.5) ✅
+- **Phase 2.6:** Scrum board prompt (Story 2.6.1) ✅
+- **Phase 2.7:** TTS quality upgrade (Stories 2.7.1–2.7.2) — future
+- **Phase 3A:** Audio capture + transcription — future
+- **Phase 3B:** LLM-based turn detection — future
+- **Phase 3C:** Contextual chat — future
 
 ## Git Conventions
 
@@ -93,13 +112,21 @@ See `.env.example` for all required/optional variables. Key ones:
 - `BOT_DISPLAY_NAME` — defaults to "Clive: Standup AI"
 - `HEADLESS` — false for dev, true for prod
 - `MODE` — "direct" or "api"
+- `LANGUAGE` — "en" or "fr"
 - `API_PORT` — defaults to 3002
 - `LAST_SPEAKER_NAME` — name pattern for who goes last (default: "Kinder")
+- `AUDIO_DEVICE` — virtual audio device (default: "BlackHole 2ch")
+- `AVATAR_VIDEO_PATH` — looping video avatar (takes priority over image)
+- `AVATAR_IMAGE_PATH` — static avatar image
+- `SCRUM_BOARD_PROMPT` — prompt lead to share board (default: true)
 
 ## What NOT To Do
 
 - **Don't use the Microsoft Graph API or Azure Communication Services.** This bot joins as a web guest, not via any Microsoft API. No Azure AD app registration, no admin consent, no Teams SDK.
 - **Don't try to install or use the Teams desktop app.** Everything goes through the browser web client.
 - **Don't hardcode selectors inline.** Always reference the centralised selectors file.
+- **Don't hardcode user-facing strings.** Always use `src/i18n/messages.ts`.
 - **Don't add a database.** Sessions live in memory. This is a POC.
 - **Don't over-engineer.** This is a working POC, not a product. Favour simplicity and readability over abstraction.
+- **Don't block the standup flow with TTS.** Chat message first, TTS is fire-and-forget.
+- **Don't speak command responses via TTS** unless `speakResponse: true`. Most commands are chat-only.
