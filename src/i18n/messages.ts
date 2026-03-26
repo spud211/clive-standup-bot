@@ -13,6 +13,7 @@ export interface Messages {
   ops: string;
   boardPrompt: string;
   boardPromptWithUrl: string;
+  commandHint: string;
 }
 
 const en: Messages = {
@@ -38,6 +39,7 @@ const en: Messages = {
   ops: "⚡ Mode +o {name} — you have the conn today, {firstName}. Keep us honest.",
   boardPrompt: "🖥️ **{name}**, fancy sharing the board? I'll wait 10 seconds, or type **go** to skip.",
   boardPromptWithUrl: "🖥️ **{name}**, fancy sharing the board? ({url}) I'll wait 10 seconds, or type **go** to skip.",
+  commandHint: "💡 I can do more than standups — try /poll, /timer, /quote, /flip, /8ball, or /help for the full list.",
 };
 
 const fr: Messages = {
@@ -62,6 +64,7 @@ const fr: Messages = {
   ops: "⚡ Mode +o {name} — c'est toi le chef aujourd'hui, {firstName}. Garde-nous sur les rails.",
   boardPrompt: "🖥️ **{name}**, tu veux partager le board ? J'attends 10 secondes, ou tape **go** pour passer.",
   boardPromptWithUrl: "🖥️ **{name}**, tu veux partager le board ? ({url}) J'attends 10 secondes, ou tape **go** pour passer.",
+  commandHint: "💡 Je peux faire plus que les standups — essayez /poll, /timer, /quote, /flip, /8ball, ou /help pour la liste complète.",
 };
 
 const allMessages: Record<Language, Messages> = { en, fr };

@@ -31,6 +31,12 @@ export class SystemTtsProvider implements TtsProvider {
     args.push(text);
 
     await execFileAsync("say", args);
+
+    // Brief pause to let the audio buffer flush through BlackHole
+    // before the next action. Without this, the tail of the utterance
+    // can get clipped when something else starts immediately after.
+    await new Promise((r) => setTimeout(r, 500));
+
     console.log("[TTS:system] Playback complete.");
   }
 }

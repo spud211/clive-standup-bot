@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { type Browser, type BrowserContext, type Page } from "playwright";
 import { launchBrowser } from "../browser/launch.js";
 import { navigateToMeeting, joinMeeting, leaveMeeting } from "../browser/teams-join.js";
-import { ChatMonitor, sendAndSpeak } from "./chat.js";
+import { ChatMonitor, sendAndSpeak, sendChatMessage } from "./chat.js";
 import { Standup } from "./standup.js";
 import { installVirtualCamera, enableCamera } from "../browser/virtual-camera.js";
 import { config } from "../config.js";
@@ -161,6 +161,7 @@ export class SessionManager {
 
     // Send welcome and start monitoring
     await sendAndSpeak(page, pickWelcome(msg), language);
+    await sendChatMessage(page, msg.commandHint);
 
     session.status = "idle";
 

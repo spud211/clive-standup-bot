@@ -1,7 +1,7 @@
 import { config } from "./config.js";
 import { launchBrowser } from "./browser/launch.js";
 import { navigateToMeeting, joinMeeting, leaveMeeting } from "./browser/teams-join.js";
-import { ChatMonitor, sendAndSpeak } from "./meeting/chat.js";
+import { ChatMonitor, sendAndSpeak, sendChatMessage } from "./meeting/chat.js";
 import { Standup } from "./meeting/standup.js";
 import { startApiServer } from "./api/server.js";
 import { installVirtualCamera, enableCamera } from "./browser/virtual-camera.js";
@@ -56,6 +56,7 @@ async function main(): Promise<void> {
   const lang = config.language;
   const msg = getMessages(lang);
   await sendAndSpeak(page, pickWelcome(msg), lang);
+  await sendChatMessage(page, msg.commandHint);
 
   // Set up chat monitoring
   const chatMonitor = new ChatMonitor(page, config.botDisplayName);

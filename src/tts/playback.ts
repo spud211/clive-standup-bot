@@ -30,6 +30,9 @@ export async function playFileToDevice(filePath: string): Promise<void> {
 
     // Play the file
     await execFileAsync("afplay", [filePath]);
+
+    // Let the audio buffer flush through BlackHole before switching back
+    await new Promise((r) => setTimeout(r, 500));
   } finally {
     // Restore previous output device
     if (previousOutput && previousOutput !== device) {
