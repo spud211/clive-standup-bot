@@ -16,20 +16,33 @@ function resolveVoice(lang: Language): string {
   return config.ttsVoice || defaultVoices.en;
 }
 
+/** Serial queue — ensures one utterance finishes before the next starts. */
+let speechQueue: Promise<void> = Promise.resolve();
+
 /**
  * Play TTS audio into the meeting by routing it through BlackHole 2ch.
  *
  * Uses `say -a "BlackHole 2ch"` to speak directly to the virtual audio
  * device. Chromium picks up BlackHole as its mic input, so Teams hears
  * the speech.
+ *
+ * Calls are serialised: if a second call arrives while the first is still
+ * speaking, it waits for the first to finish before starting.
  */
-export async function playAudioInMeeting(text: string, lang?: Language): Promise<void> {
+export function playAudioInMeeting(text: string, lang?: Language): Promise<void> {
   const device = config.audioDevice;
   if (!device) {
     console.log("[Audio] No audio device configured — skipping playback.");
-    return;
+    return Promise.resolve();
   }
 
+  const job = speechQueue.then(() => speakToDevice(text, device, lang));
+  // Update the queue tail — swallow errors so one failure doesn't block the queue
+  speechQueue = job.catch(() => {});
+  return job;
+}
+
+async function speakToDevice(text: string, device: string, lang?: Language): Promise<void> {
   const effectiveLang = lang ?? config.language;
   const voice = resolveVoice(effectiveLang);
 
